@@ -217,7 +217,20 @@ with col_nav:
         value=st.session_state.pipeline_topic,
         placeholder="e.g. Federated Learning in Healthcare"
     )
-    run_btn = st.button("Run Analysis", use_container_width=True, type="primary")
+    c1, c2 = st.columns(2)
+    with c1:
+        run_btn = st.button("Run Analysis", use_container_width=True, type="primary")
+    with c2:
+        if st.button("Clear Cache & Restart", use_container_width=True):
+            import shutil
+            if os.path.exists(CACHE_DIR):
+                shutil.rmtree(CACHE_DIR)
+            for key in RESULT_KEYS:
+                st.session_state[key] = None
+            st.session_state.pipeline_run = False
+            st.session_state.active_step = 1
+            st.session_state.debug_logs = []
+            st.rerun()
     
     st.markdown("---")
     st.markdown("##### Pipeline")
@@ -840,18 +853,17 @@ with col_main:
                 st.download_button("Export as text file", data=json.dumps(grant_data, indent=2), file_name="grant.txt")
                 
             st.markdown("---")
-            sections = [
-                ("Problem Statement", "problem_statement"),
-                ("Proposed Methodology", "proposed_methodology"),
-                ("Evaluation Plan", "evaluation_plan"),
-                ("Expected Contribution", "expected_contribution"),
-                ("Timeline", "timeline"),
-                ("Budget Estimate", "budget_estimate"),
-            ]
-            for title, key in sections:
-                content = grant_data.get(key, "")
-                if content:
-                    st.markdown(f'<div class="grant-section"><h3>{title}</h3><p>{content}</p><p style="color:#64748b; font-size:0.8rem;">Format specific limit applied</p></div>', unsafe_allow_html=True)
+            for key, val in grant_data.items():
+                if key in ["title", "format_used", "sections"]: continue
+                title = key.replace("_", " ").title()
+                if isinstance(val, list): val = "<br>• " + "<br>• ".join(str(v) for v in val)
+                st.markdown(f'<div class="grant-section"><h3>{title}</h3><p>{val}</p></div>', unsafe_allow_html=True)
+                
+            if "sections" in grant_data:
+                for title, content in grant_data["sections"].items():
+                    if isinstance(content, str):
+                        content = content.replace("\\n", "<br>")
+                    st.markdown(f'<div class="grant-section"><h3>{title}</h3><p>{content}</p></div>', unsafe_allow_html=True)
         else:
             st.info("No grant generated yet.")
 
@@ -889,21 +901,21 @@ with col_main:
                 """, unsafe_allow_html=True)
         else:
             st.info("No novelty score generated yet.")
+
+# ── Debug Console (Full Width at Bottom) ─────────────────────────────────────
+st.markdown("---")
+with st.expander("Terminal Logs", expanded=False):
+    if not st.session_state.debug_logs:
+        st.markdown("*(No logs yet...)*")
+    else:
+        log_html = '<div style="background:#0f172a; padding:12px; border-radius:6px; font-family:monospace; font-size:0.85rem; max-height:400px; overflow-y:auto;">'
+        for ts, level, msg in st.session_state.debug_logs:
+            color = "#94a3b8"
+            if level == "stage": color = "#a78bfa"
+            elif level == "error": color = "#ef4444"
+            elif level == "warning": color = "#eab308"
+            elif level == "success": color = "#4ade80"
             
-    # ── Debug Console ────────────────────────────────────────────────────────────
-    st.markdown("---")
-    with st.expander("Terminal Logs", expanded=False):
-        if not st.session_state.debug_logs:
-            st.markdown("*(No logs yet...)*")
-        else:
-            log_html = '<div style="background:#0f172a; padding:12px; border-radius:6px; font-family:monospace; font-size:0.85rem; max-height:400px; overflow-y:auto;">'
-            for ts, level, msg in st.session_state.debug_logs:
-                color = "#94a3b8"
-                if level == "stage": color = "#a78bfa"
-                elif level == "error": color = "#ef4444"
-                elif level == "warning": color = "#eab308"
-                elif level == "success": color = "#4ade80"
-                
-                log_html += f'<div style="margin-bottom:4px;"><span style="color:#64748b; font-size:0.75rem;">[{ts}]</span> <span style="color:{color};">{msg}</span></div>'
-            log_html += '</div>'
-            st.markdown(log_html, unsafe_allow_html=True)
+            log_html += f'<div style="margin-bottom:4px;"><span style="color:#64748b; font-size:0.75rem;">[{ts}]</span> <span style="color:{color};">{msg}</span></div>'
+        log_html += '</div>'
+        st.markdown(log_html, unsafe_allow_html=True)
