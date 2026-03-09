@@ -65,6 +65,10 @@ def safe_parse(text: str, required_keys: list = None) -> dict:
     Parses JSON and optionally validates required keys.
     Raises ValueError on failure.
     """
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r'^```[a-zA-Z]*\n', '', text)
+        text = re.sub(r'\n```$', '', text)
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:

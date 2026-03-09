@@ -12,6 +12,8 @@ from agents.grant_agent import run as run_grant
 from agents.novelty_agent import run as run_novelty
 from utils.cache import save, load, CACHE_DIR
 from utils.quality_gate import evaluate_quality
+from utils.format_loader import load_all_formats
+from agents.format_matcher import run as run_format_matcher
 
 try:
     from crewai import Agent, Task, Crew, Process
@@ -41,6 +43,8 @@ def run_pipeline(topic: str) -> dict:
     os.makedirs(CACHE_DIR, exist_ok=True)
     with open(os.path.join(CACHE_DIR, "_topic.txt"), "w") as f:
         f.write(topic)
+
+    formats = load_all_formats()
 
     # Mock OpenAI key to satisfy CrewAI's default Agent(llm=ChatOpenAI()) instantiation without errors
     os.environ["OPENAI_API_KEY"] = "sk-mock-key-for-crewai-init"
@@ -117,12 +121,29 @@ def run_pipeline(topic: str) -> dict:
         func=lambda: state.setdefault("methodology", load("methodology") or (save("methodology", run_methodology(get_gap_desc(), topic)) or delay()) or load("methodology"))
     )
 
+    t5b = CustomTask(
+        description="Format Matching",
+        expected_output="Format selection JSON",
+        agent=dummy_agent,
+        func=lambda: state.setdefault(
+            "format_match",
+            load("format_match") or (
+                save("format_match", run_format_matcher(
+                    topic,
+                    state.get("methodology"),
+                    formats,
+                    state.get("user_format_override")
+                )) or delay()
+            ) or load("format_match")
+        )
+    )
+
     # Agent 5
     t6 = CustomTask(
         description="Grant Writing",
         expected_output="Grant JSON",
         agent=dummy_agent,
-        func=lambda: state.setdefault("grant", load("grant") or (save("grant", run_grant(topic, get_gap_desc(), state.get("methodology"))) or delay()) or load("grant"))
+        func=lambda: state.setdefault("grant", load("grant") or (save("grant", run_grant(topic, get_gap_desc(), state.get("methodology"), state.get("format_match"))) or delay()) or load("grant"))
     )
 
     # Agent 6
@@ -136,7 +157,7 @@ def run_pipeline(topic: str) -> dict:
     # Orchestrate with CrewAI
     crew = Crew(
         agents=[dummy_agent],
-        tasks=[t1, t2, t2_gate, t3, t4, t4_gate, t5, t6, t7],
+        tasks=[t1, t2, t2_gate, t3, t4, t4_gate, t5, t5b, t6, t7],
         process=Process.sequential,
         verbose=True
     )

@@ -1,0 +1,56 @@
+{
+  "format_id": "nsf_cise",
+  "name": "NSF CISE Core Research (CSR / CCF / CNS / IIS)",
+  "funding_body": "National Science Foundation",
+  "typical_award_usd": "200000-600000",
+  "typical_duration_years": "3-5",
+  "domain_keywords": [
+    "algorithm", "neural", "deep learning", "machine learning", "artificial intelligence",
+    "AI", "system", "network", "software", "computational", "data", "quantum",
+    "computer science", "programming", "distributed", "security", "privacy",
+    "human-computer interaction", "vision", "NLP", "natural language"
+  ],
+  "career_stage": ["early", "established"],
+  "emphasis": "Two review criteria weighted equally: Intellectual Merit (scientific rigor, novelty, theoretical grounding) and Broader Impacts (societal benefit, education outreach, diversity). Both must appear as explicit, named subsections. Reviewers penalize proposals that bury Broader Impacts. Reproducibility and open data are valued. Basic research framing is appropriate — applied/commercialization language weakens the proposal.",
+  "avoid": "Overselling commercialization potential or startup outcomes. Avoid clinical or health-system framing unless formally partnered with an NSF BIO or MPS program. Do not merge Intellectual Merit and Broader Impacts into one section.",
+  "rhetorical_tone": "Academic, precise, hypothesis-driven. Active voice for objectives. Avoid hedging language in aims.",
+  "sections": [
+    {
+      "name": "Project Summary",
+      "max_words": 250,
+      "max_pages": null,
+      "required": true,
+      "notes": "Must contain exactly three paragraphs: (1) Overview, (2) Intellectual Merit, (3) Broader Impacts. These labels must appear explicitly. This is the first thing reviewers read — make the core idea immediately clear."
+    },
+    {
+      "name": "Project Description",
+      "max_words": null,
+      "max_pages": 15,
+      "required": true,
+      "notes": "Must contain labeled subsections for Intellectual Merit and Broader Impacts. Include: motivation and significance, research objectives, technical approach, expected contributions, timeline. No hard word limits per subsection but both must be substantive."
+    },
+    {
+      "name": "References Cited",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "No page limit. Use full citations with all authors, title, venue, year, DOI where available."
+    },
+    {
+      "name": "Data Management Plan",
+      "max_words": null,
+      "max_pages": 2,
+      "required": true,
+      "notes": "Describe what data will be produced, how it will be stored, and how it will be shared. Mention specific repositories (e.g. GitHub, Zenodo, institutional repository)."
+    },
+    {
+      "name": "Facilities, Equipment, and Other Resources",
+      "max_words": null,
+      "max_pages": null,
+      "required": false,
+      "notes": "Describe computational resources, lab access, and institutional support available to the team."
+    }
+  ],
+  "source_url": "https://new.nsf.gov/funding/opportunities/core-research-cise",
+  "notes": "NSF PAPPG (Proposal & Award Policies & Procedures Guide) is the master document for formatting rules. Check the current PAPPG version before submission as rules update annually."
+}

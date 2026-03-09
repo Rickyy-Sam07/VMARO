@@ -1,0 +1,41 @@
+{
+  "format_id": "nih_r21",
+  "name": "NIH R21 Exploratory / Developmental Research Grant",
+  "funding_body": "National Institutes of Health",
+  "typical_award_usd": "275000",
+  "typical_duration_years": "2",
+  "domain_keywords": [
+    "health", "medical", "exploratory", "pilot", "novel approach", "feasibility",
+    "disease", "biomedical", "preliminary", "proof of concept", "early stage",
+    "innovative method", "clinical", "biology", "neuroscience"
+  ],
+  "career_stage": ["early", "established"],
+  "emphasis": "High-risk, high-reward science. Preliminary data is NOT required and reviewers are briefed accordingly — penalizing a proposal for lacking it is a review error. The idea must be genuinely novel and exploratory in character. Reviewers look for: transformative potential, clear rationale, and a team capable of executing the feasibility study.",
+  "avoid": "Presenting so much preliminary data that the proposal reads like a completed R01. Conservative, low-risk aims inappropriate for R21. Do not propose aims that would normally justify a full R01 — scope must match the 2-year, $275K ceiling.",
+  "rhetorical_tone": "Bold, exploratory, speculative-but-grounded. Acknowledge uncertainty explicitly as part of the scientific question.",
+  "sections": [
+    {
+      "name": "Specific Aims",
+      "max_words": null,
+      "max_pages": 1,
+      "required": true,
+      "notes": "Same structure as R01 Specific Aims but shorter scope. State what you will explore and what success looks like at the end of 2 years."
+    },
+    {
+      "name": "Research Strategy",
+      "max_words": null,
+      "max_pages": 6,
+      "required": true,
+      "notes": "Same three subsections as R01 (Significance, Innovation, Approach) but compressed. Approach should focus on feasibility demonstrations, not full mechanistic studies."
+    },
+    {
+      "name": "Bibliography and References Cited",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "No page limit."
+    }
+  ],
+  "source_url": "https://grants.nih.gov/grants/funding/r21.htm",
+  "notes": "R21 is appropriate when you have an innovative idea but insufficient data for an R01. It is not a stepping stone to be misused for incremental work."
+}

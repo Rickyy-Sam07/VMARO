@@ -1,0 +1,51 @@
+{
+  "_instructions": {
+    "purpose": "This is the schema for a custom grant format in VMARO. Fill in all fields and upload via the Streamlit UI.",
+    "required_fields": ["format_id", "name", "funding_body", "domain_keywords", "emphasis", "sections"],
+    "optional_fields": ["typical_award_usd", "typical_duration_years", "career_stage", "avoid", "rhetorical_tone", "source_url", "notes"],
+    "format_id_rules": "Lowercase, underscores only, no spaces. Must be unique. Example: my_university_internal",
+    "domain_keywords_tip": "These are used by the LLM matcher to auto-select this format. Include topic words your grant covers.",
+    "section_notes_tip": "Use the 'notes' field in each section to give Agent 5 specific guidance for that section.",
+    "remove_this_instructions_block": true
+  },
+  "format_id": "your_format_id_here",
+  "name": "Full Human-Readable Name of the Grant",
+  "funding_body": "Name of the Funding Organization",
+  "typical_award_usd": "100000-500000",
+  "typical_duration_years": "3",
+  "domain_keywords": [
+    "keyword1",
+    "keyword2",
+    "keyword3",
+    "add as many as relevant"
+  ],
+  "career_stage": ["early", "established"],
+  "emphasis": "Describe what reviewers care most about. This is injected directly into Agent 5's system prompt. Be specific — mention if certain sections are weighted, if preliminary data is expected, if societal impact is a first-class criterion, etc.",
+  "avoid": "Describe what NOT to do in this format. E.g. avoid clinical framing, avoid incremental objectives, avoid overselling commercialization.",
+  "rhetorical_tone": "Academic and precise | Clinical and mechanistic | Bold and exploratory | Policy-aware and impact-forward | Direct and capability-focused",
+  "sections": [
+    {
+      "name": "Section Name",
+      "max_words": 250,
+      "max_pages": null,
+      "required": true,
+      "notes": "Specific guidance for this section. What must it contain? Any structural requirements?"
+    },
+    {
+      "name": "Second Section Name",
+      "max_words": null,
+      "max_pages": 15,
+      "required": true,
+      "notes": "Use max_words OR max_pages, not both. Set the unused one to null."
+    },
+    {
+      "name": "Optional Section",
+      "max_words": null,
+      "max_pages": 2,
+      "required": false,
+      "notes": "Set required to false for optional sections."
+    }
+  ],
+  "source_url": "https://link-to-official-grant-call-or-guidelines.org",
+  "notes": "Any additional context about this grant format that doesn't fit above."
+}

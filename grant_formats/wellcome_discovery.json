@@ -1,0 +1,63 @@
+{
+  "format_id": "wellcome_discovery",
+  "name": "Wellcome Discovery Award",
+  "funding_body": "Wellcome Trust",
+  "typical_award_usd": "3000000-8000000",
+  "typical_duration_years": "5-8",
+  "domain_keywords": [
+    "biomedical", "health", "disease", "mental health", "global health",
+    "biology", "neuroscience", "infection", "immunity", "genomics",
+    "population health", "pathogen", "chronic disease", "developmental biology",
+    "systems biology", "translational", "wellbeing", "neglected tropical disease"
+  ],
+  "career_stage": ["established"],
+  "emphasis": "Ambitious, long-horizon science that is too risky for government funding agencies. Wellcome explicitly positions itself as the funder for ideas government agencies cannot support. The Plain Language Summary is taken as seriously as the scientific abstract — public benefit must be articulable to an intelligent non-expert. Team environment and institutional support matter more than in NIH applications. Interdisciplinary approaches are valued.",
+  "avoid": "Conservative, low-risk objectives that would easily win an R01. Pure methods development without a clear health or disease motivation. Proposals that are not genuinely ambitious in scope and timeframe.",
+  "rhetorical_tone": "Ambitious, narrative-driven, accessible. Lead with the human health motivation. The Plain Language Summary should be compelling to a journalist, not just a scientist.",
+  "sections": [
+    {
+      "name": "Plain Language Summary",
+      "max_words": 150,
+      "max_pages": null,
+      "required": true,
+      "notes": "Written for an intelligent non-scientist. Describe: what the problem is, why it matters, what you will do, and what success will mean for human health. Reviewed with the same weight as the scientific abstract. Avoid jargon entirely."
+    },
+    {
+      "name": "Scientific Abstract",
+      "max_words": 250,
+      "max_pages": null,
+      "required": true,
+      "notes": "Standard scientific summary for the review panel. Describe background, hypothesis, approach, and expected outcomes. Quantify scope where possible."
+    },
+    {
+      "name": "Background and Rationale",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "Establish the problem, review the state of knowledge, identify the gap, and explain why this is the right time to pursue this question. Connect to human health impact."
+    },
+    {
+      "name": "Research Design and Methods",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "Describe experimental design, methods, controls, and analysis plan. Address potential limitations and alternative strategies. Include timeline with major milestones."
+    },
+    {
+      "name": "Team and Environment",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "Wellcome weights team quality highly. Describe: PI track record, co-investigator expertise, institutional resources and support, collaborators, and how the environment enables this specific research."
+    },
+    {
+      "name": "Outputs and Dissemination",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "Describe expected publications, datasets, tools, and other outputs. Wellcome requires open access publication and expects a data sharing plan. Describe public engagement activities where appropriate."
+    }
+  ],
+  "source_url": "https://wellcome.org/grant-funding/schemes/discovery-awards",
+  "notes": "Wellcome has an open application process — no invitation required. Applications are reviewed in rounds. The Trust has specific interests in mental health, infectious disease, and global health equity that score well even if not explicitly stated in the scheme description."
+}

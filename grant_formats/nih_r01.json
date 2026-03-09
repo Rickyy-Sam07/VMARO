@@ -1,0 +1,57 @@
+{
+  "format_id": "nih_r01",
+  "name": "NIH R01 Research Project Grant",
+  "funding_body": "National Institutes of Health",
+  "typical_award_usd": "250000-500000",
+  "typical_duration_years": "5",
+  "domain_keywords": [
+    "health", "medical", "clinical", "disease", "cancer", "drug",
+    "therapy", "treatment", "diagnosis", "biomedical", "pathology",
+    "patient", "genomics", "neuroscience", "epidemiology", "biology",
+    "molecular", "cellular", "immune", "cardiovascular", "psychiatric",
+    "mental health", "infection", "inflammation", "biomarker"
+  ],
+  "career_stage": ["established"],
+  "emphasis": "Three review criteria scored independently: Significance (does this address an important problem?), Innovation (does this challenge existing paradigms?), Approach (is the methodology rigorous and feasible?). Preliminary data is expected and critically evaluated — reviewers will downgrade proposals without it. Each Specific Aim must be independently testable so that failure of one aim does not sink the entire project. Overall Impact score synthesizes all three criteria plus Investigator and Environment.",
+  "avoid": "Vague or overlapping aims. Aims that depend entirely on each other are a red flag. Avoid exploratory or feasibility framing — that belongs in R21. Do not exceed page limits by even one line.",
+  "rhetorical_tone": "Clinical, mechanistic, hypothesis-driven. Active voice for aims. Use precise quantitative language for expected outcomes.",
+  "sections": [
+    {
+      "name": "Specific Aims",
+      "max_words": null,
+      "max_pages": 1,
+      "required": true,
+      "notes": "The single most important page. Structure: (1) opening paragraph stating the problem and long-term goal, (2) central hypothesis, (3) 2-4 numbered aims each with a brief rationale, (4) closing paragraph stating expected impact. Each aim should be testable independently."
+    },
+    {
+      "name": "Research Strategy",
+      "max_words": null,
+      "max_pages": 12,
+      "required": true,
+      "notes": "Three mandatory subsections: (A) Significance — establish importance and knowledge gap; (B) Innovation — explain what is new about approach or concept; (C) Approach — one subsection per aim covering design, methods, expected outcomes, potential problems and alternative strategies, and timeline."
+    },
+    {
+      "name": "Bibliography and References Cited",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "No page limit. Full citations required."
+    },
+    {
+      "name": "Human Subjects or Vertebrate Animals",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "State N/A explicitly if not applicable — do not omit this section. If human subjects are involved, include protections, risks, and inclusion of women and minorities."
+    },
+    {
+      "name": "Resource Sharing Plan",
+      "max_words": null,
+      "max_pages": 1,
+      "required": false,
+      "notes": "Required if requesting $500K+ direct costs in any year, or if producing unique model organisms, genomic data, or software tools."
+    }
+  ],
+  "source_url": "https://grants.nih.gov/grants/how-to-apply-application-guide/forms-f/research-forms-f.htm",
+  "notes": "NIH uses a percentile-based funding system. The Specific Aims page is often circulated to all reviewers before the full application — it must stand alone as a compelling argument."
+}

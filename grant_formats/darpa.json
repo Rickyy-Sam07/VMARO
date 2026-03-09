@@ -1,0 +1,56 @@
+{
+  "format_id": "darpa",
+  "name": "DARPA Broad Agency Announcement (BAA)",
+  "funding_body": "Defense Advanced Research Projects Agency",
+  "typical_award_usd": "500000-5000000",
+  "typical_duration_years": "3-4",
+  "domain_keywords": [
+    "defense", "autonomous", "AI", "cyber", "sensor", "robotics",
+    "quantum", "adversarial", "secure", "resilient", "breakthrough",
+    "autonomous system", "human-machine", "electronic warfare", "ISR",
+    "machine learning", "edge computing", "trusted AI", "bio-inspired"
+  ],
+  "career_stage": ["established"],
+  "emphasis": "Revolutionary capability, not incremental improvement. Technical risk is expected and must be acknowledged explicitly with go/no-go decision points — proposals that claim no risk are viewed skeptically. Program Managers (PMs) fund people as much as ideas: PI credentials, prior government research experience, and team track record carry heavy weight. Lead with the breakthrough claim — do not bury the core technical insight in background.",
+  "avoid": "Incremental improvements to existing systems. Academic hedging language (e.g. 'may potentially contribute'). Overly detailed literature reviews — DARPA PMs know the field. Proposals without clear phase-gated milestones and measurable deliverables per phase.",
+  "rhetorical_tone": "Direct, confident, capability-focused. Bold assertions are appropriate if technically grounded. Use plain language — avoid jargon that obscures the core idea.",
+  "sections": [
+    {
+      "name": "Technical Approach",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "Lead with the key technical insight — one paragraph, plain language, no hedging. Then: problem statement, proposed solution, why existing approaches fail, technical details of the approach, expected capabilities at end of program."
+    },
+    {
+      "name": "Risk and Mitigation",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "Enumerate technical risks explicitly. For each: likelihood, impact, mitigation strategy, and a go/no-go decision point. DARPA expects high risk — the goal is to show you understand the risks, not that there are none."
+    },
+    {
+      "name": "Team Qualifications",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "PI and co-PI bios focused on relevant prior work. Mention prior DARPA, DoD, or government research. If the team has unique access to data, facilities, or collaborators that others do not, say so explicitly."
+    },
+    {
+      "name": "Schedule and Milestones",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "Phase-gated structure (typically Phase 1: 18 months proof of concept; Phase 2: 18-24 months system demonstration). Each phase ends with a measurable deliverable. Include a table with milestone, metric, and date."
+    },
+    {
+      "name": "Budget",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "Itemized by phase. Labor, equipment, subcontracts, travel, and indirect costs. DARPA expects cost realism — do not underbid to win then request modifications."
+    }
+  ],
+  "source_url": "https://www.darpa.mil/work-with-us/for-universities",
+  "notes": "DARPA BAAs are program-specific — there is no single master format. The structure above reflects common BAA requirements. Always read the specific BAA document carefully for deviations. White papers (4-6 pages) are typically submitted before full proposals."
+}

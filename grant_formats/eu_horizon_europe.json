@@ -1,0 +1,49 @@
+{
+  "format_id": "eu_horizon_europe",
+  "name": "EU Horizon Europe Research and Innovation Action (RIA)",
+  "funding_body": "European Commission — Horizon Europe Framework Programme",
+  "typical_award_usd": "1000000-4000000",
+  "typical_duration_years": "3-4",
+  "domain_keywords": [
+    "interdisciplinary", "European", "climate", "sustainability", "green",
+    "digital", "health", "energy", "society", "innovation", "collaboration",
+    "consortium", "cross-border", "mission", "twin transition", "AI", "data",
+    "resilience", "circular economy", "biodiversity", "social"
+  ],
+  "career_stage": ["established"],
+  "emphasis": "Three pillars evaluated with equal weight: (1) Excellence — scientific quality, methodology, innovation beyond state of the art; (2) Impact — measurable EU-level outcomes, dissemination, exploitation, KPIs; (3) Implementation — consortium quality, work packages, risk management, budget justification. European Added Value is a cross-cutting criterion — the proposal must explain why this requires EU-level funding rather than national funding. Tie explicitly to at least one Horizon Europe Mission or cluster priority.",
+  "avoid": "Single-institution proposals — consortium of at least 3 partners from different EU member states or associated countries is standard. Purely basic research without societal impact pathway. Vague KPIs. Budget without detailed justification per work package.",
+  "rhetorical_tone": "Policy-aware, impact-forward, collaborative. Use work package (WP) language. Numbered deliverables and milestones are expected.",
+  "sections": [
+    {
+      "name": "Excellence",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "Cover: objectives and ambition, methodology and approach, level of innovation, open science practices. Must reference and position against state of the art explicitly."
+    },
+    {
+      "name": "Impact",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "Cover: expected outcomes and impacts (quantified KPIs where possible), dissemination and communication plan, exploitation strategy, European Added Value statement."
+    },
+    {
+      "name": "Implementation",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "Cover: work plan with numbered WPs and tasks, Gantt chart, consortium partner descriptions and roles, budget breakdown per partner and WP, risk register with mitigation strategies."
+    },
+    {
+      "name": "Ethics",
+      "max_words": null,
+      "max_pages": null,
+      "required": true,
+      "notes": "Complete the ethics self-assessment table even for low-risk proposals. Omitting this section causes administrative rejection. If human data, AI, or dual-use technology is involved, provide detailed justification."
+    }
+  ],
+  "source_url": "https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/home",
+  "notes": "Horizon Europe uses a two-stage evaluation: remote expert review followed by consensus panel. The Impact section is frequently underwritten by applicants from pure-science backgrounds — invest proportionate effort in it."
+}

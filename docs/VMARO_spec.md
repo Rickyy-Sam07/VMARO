@@ -85,7 +85,7 @@ python-dotenv
 
 ### Free Tier Limits (Groq per key)
 | Limit | Value |
-|-------|-------|
+|-------|-------|i
 | Requests/day | 14,400 |
 | Requests/minute | 30 |
 

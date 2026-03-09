@@ -6,6 +6,8 @@ import io
 import sys
 from datetime import datetime
 from utils.cache import save, load, CACHE_DIR
+from utils.format_loader import load_all_formats, register_custom_format
+from agents.format_matcher import run as run_format_matcher
 
 # ── Page Config ──────────────────────────────────────────────────────────────
 st.set_page_config(page_title="VMARO Research Orchestrator", layout="wide")
@@ -168,7 +170,7 @@ st.markdown("""
 
 # ── Session State Init ───────────────────────────────────────────────────────
 # All pipeline results are stored in session_state so they survive reruns.
-RESULT_KEYS = ["papers", "tree", "qg1", "trends", "gaps", "qg2", "methodology", "grant", "novelty"]
+RESULT_KEYS = ["papers", "tree", "qg1", "trends", "gaps", "qg2", "methodology", "format_match", "grant", "novelty"]
 
 if "pipeline_run" not in st.session_state:
     st.session_state.pipeline_run = False
@@ -182,6 +184,14 @@ if "debug_logs" not in st.session_state:
     st.session_state.debug_logs = []
 if "stage_timings" not in st.session_state:
     st.session_state.stage_timings = {}
+
+# Grant format session states
+if "formats" not in st.session_state:
+    st.session_state.formats = load_all_formats()
+if "phase" not in st.session_state:
+    st.session_state.phase = 1   # 1 = pre-format-selection, 2 = post
+if "user_format_override" not in st.session_state:
+    st.session_state.user_format_override = None
 
 
 class StreamCapture:
@@ -257,6 +267,7 @@ STAGES = [
     ("", "Gap Identification",      "gaps"),
     ("", "Quality Gate 2",          "qg2"),
     ("", "Methodology Design",     "methodology"),
+    ("", "Format Selection",       "format_match"),
     ("", "Grant Writing",          "grant"),
     ("", "Novelty Scoring",        "novelty"),
 ]
@@ -295,6 +306,42 @@ with st.sidebar:
             f'<div class="stage-badge {badge_class}">{icon} {name}</div>',
             unsafe_allow_html=True
         )
+
+    st.markdown("---")
+    st.markdown("### Custom Grant Format")
+    
+    # Download template button
+    try:
+        with open("schemas_for_user/custom_grant_format_template.json", "r") as f:
+            template_content = f.read()
+        st.download_button(
+            label="Download Blank Template (JSON)",
+            data=template_content,
+            file_name="custom_grant_format_template.json",
+            mime="application/json",
+            help="Fill in this template and upload below to use your own grant format."
+        )
+    except FileNotFoundError:
+        st.caption("Custom format template not found.")
+
+    # Upload widget
+    uploaded_file = st.file_uploader(
+        "Upload Custom Format (JSON)",
+        type=["json"],
+        help="Upload a filled-in format template to add it to the selector."
+    )
+    if uploaded_file:
+        try:
+            custom_fmt = json.load(uploaded_file)
+            success, errors = register_custom_format(custom_fmt, st.session_state.formats)
+            if success:
+                st.success(f"Format '{custom_fmt['format_id']}' loaded successfully.")
+            else:
+                st.error("Validation failed:")
+                for err in errors:
+                    st.markdown(f"- {err}")
+        except json.JSONDecodeError:
+            st.error("Invalid JSON — check your file and try again.")
 
     # Debug toggle
     st.markdown("---")
@@ -355,6 +402,7 @@ if run_btn:
             shutil.rmtree(CACHE_DIR)
             for key in RESULT_KEYS:
                 st.session_state[key] = None
+            st.session_state.phase = 1
 
     os.makedirs(CACHE_DIR, exist_ok=True)
     with open(last_topic_file, "w") as f:
@@ -365,6 +413,7 @@ if run_btn:
     st.session_state.stage_status = {}
     st.session_state.debug_logs = []
     st.session_state.stage_timings = {}
+    st.session_state.phase = 1
 
     # Start capturing stdout for the debug console
     _original_stdout = sys.stdout
@@ -569,6 +618,109 @@ if run_btn:
             set_stage("methodology", "error")
         st.session_state.stage_timings["methodology"] = round(time.time() - _t0, 1)
 
+    # Phase 1 complete. Await user for Format Selection.
+    st.session_state.phase = 2
+    st.session_state.pipeline_run = True
+
+    # Restore stdout temporarily
+    sys.stdout = _original_stdout
+
+if st.session_state.get("phase") == 2:
+    st.markdown("---")
+    st.subheader("📋 Select Grant Format")
+    
+    # ── Stage 7.5: Intercept Format Selection ──
+    # Run the invisible LLM format matcher default if not cached
+    if not load("format_match"):
+        with st.spinner("Analyzing methodology to recommend best grant format..."):
+            _original_stdout = sys.stdout
+            sys.stdout = StreamCapture(_original_stdout)
+            
+            fm = run_format_matcher(
+                st.session_state.pipeline_topic,
+                st.session_state.get("methodology", {}),
+                st.session_state.formats,
+                None
+            )
+            save("format_match", fm)
+            st.session_state.format_match = fm
+            
+            sys.stdout = _original_stdout
+
+    formats = st.session_state.formats
+    format_options = {
+        fid: f"{fmt['name']} — {fmt['funding_body']}" 
+        for fid, fmt in formats.items()
+    }
+    
+    cached_match = load("format_match")
+    llm_default = cached_match.get("selected_format_id") if cached_match else None
+    
+    # If the default is invalid, fall back safely
+    if llm_default not in format_options:
+        llm_default = list(format_options.keys())[0] if format_options else None
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        selected_format_id = st.selectbox(
+            "Grant Format",
+            options=list(format_options.keys()),
+            format_func=lambda x: format_options[x],
+            index=list(format_options.keys()).index(llm_default) if llm_default else 0,
+            help="LLM recommendation pre-selected. Override as needed."
+        )
+
+    with col2:
+        if llm_default and cached_match.get("llm_selected"):
+            st.info(f"💡 LLM Recommended: **{llm_default}**")
+            
+    # Save the manual override if user changed it
+    st.session_state.user_format_override = selected_format_id
+    
+    if selected_format_id in formats:
+        with st.expander(f"About: {formats[selected_format_id].get('name', selected_format_id)}", expanded=False):
+            fmt = formats[selected_format_id]
+            st.markdown(f"**Funding Body:** {fmt.get('funding_body', 'N/A')}")
+            st.markdown(f"**Typical Award:** {fmt.get('typical_award_usd', 'N/A')} USD")
+            st.markdown(f"**Duration:** {fmt.get('typical_duration_years', 'N/A')} years")
+            st.markdown(f"**Emphasis:** {fmt.get('emphasis', '')}")
+            if fmt.get("avoid"):
+                st.markdown(f"**Avoid:** {fmt['avoid']}")
+            st.markdown("**Sections:**")
+            for s in fmt.get("sections", []):
+                req = "required" if s.get("required") else "optional"
+                limit = f"{s.get('max_words')} words" if s.get("max_words") else f"{s.get('max_pages')} pages" if s.get("max_pages") else "no limit"
+                st.markdown(f"- **{s.get('name', 'Section')}** ({req}, {limit})")
+
+    generate_btn = st.button("Generate Grant Proposal →", type="primary", use_container_width=True)
+
+if st.session_state.get("phase") == 2 and globals().get('generate_btn'):
+    from agents.grant_agent import run as run_grant
+    from agents.novelty_agent import run as run_novelty
+    
+    _original_stdout = sys.stdout
+    sys.stdout = StreamCapture(_original_stdout)
+
+    progress_bar = st.progress(0, text="Drafting Proposal...")
+    status_container = st.status("🚀 **Generating Grant & Assessing Novelty**", expanded=True)
+    total = len(STAGES)
+    
+    def update_progress(step_idx, label):
+        pct = int((step_idx / total) * 100)
+        progress_bar.progress(pct, text=f"Stage {step_idx}/{total} — {label}")
+
+    with status_container:
+        # Re-save format match with user override applied
+        fm = run_format_matcher(
+            st.session_state.pipeline_topic,
+            st.session_state.get("methodology", {}),
+            st.session_state.formats,
+            st.session_state.user_format_override
+        )
+        save("format_match", fm)
+        st.session_state.format_match = fm
+        set_stage("format_match", "complete")
+
         # ── Stage 8: Grant ──
         set_stage("grant", "running")
         update_progress(8, "Grant Writing")
@@ -586,7 +738,8 @@ if run_btn:
                     selected_gap_id
                 )
                 meth_data = st.session_state.methodology or {}
-                grant = run_grant(topic, gap_desc, meth_data)
+                format_match = st.session_state.format_match or {}
+                grant = run_grant(topic, gap_desc, meth_data, format_match)
                 if not is_fallback(grant, ["problem_statement", "proposed_methodology"]):
                     save("grant", grant)
                 time.sleep(1)
