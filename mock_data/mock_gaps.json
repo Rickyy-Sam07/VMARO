@@ -11,12 +11,16 @@
     {
       "gap_id": "G1",
       "description": "Handling severe missing modalities across different hospitals in federated learning setups.",
-      "why_underexplored": "Existing methods assume all participating hospitals have access to the same imaging modalities (e.g., both MRI and CT), which is rarely true in practice."
+      "why_underexplored": "Existing methods assume all participating hospitals have access to the same imaging modalities (e.g., both MRI and CT), which is rarely true in practice.",
+      "priority_rank": 1,
+      "feasibility_note": "Strong — several recent datasets support this setup."
     },
     {
       "gap_id": "G2",
       "description": "Federated unlearning for patient right-to-be-forgotten requests.",
-      "why_underexplored": "Current algorithms require complete retraining when a patient revokes their data consent."
+      "why_underexplored": "Current algorithms require complete retraining when a patient revokes their data consent.",
+      "priority_rank": 2,
+      "feasibility_note": "Moderate — requires complex cryptographic auditing."
     }
   ],
   "selected_gap": "G1"

@@ -6,6 +6,7 @@ from agents.tree_agent import run as run_tree
 from agents.trend_agent import run as run_trend
 from agents.gap_agent import run as run_gap
 from agents.methodology_agent import run as run_methodology
+from agents.methodology_evaluator import run as run_evaluator
 from agents.grant_agent import run as run_grant
 from agents.novelty_agent import run as run_novelty
 from agents.grant_agent import run as run_grant
@@ -36,7 +37,7 @@ def delay():
     print("Cooling down for 2s to allow rotating keys to reset limits...")
     time.sleep(2)
 
-def run_pipeline(topic: str) -> dict:
+def run_pipeline(topic: str, gap_arg: str = None, no_parallel: bool = False) -> dict:
     print(f"Starting pipeline for topic: '{topic}'\n")
     
     # Write topic marker so Streamlit can detect topic changes
@@ -109,16 +110,125 @@ def run_pipeline(topic: str) -> dict:
     t4_gate = CustomTask(description="Quality Gate 2", expected_output="QG output", agent=dummy_agent,
         func=lambda: state.setdefault("qg2", load("qg2") or (save("qg2", evaluate_quality("post_gap", state.get("gaps"))) or delay()) or load("qg2")))
 
-    def get_gap_desc():
-        selected = state["gaps"].get("selected_gap", "")
-        return next((g["description"] for g in state["gaps"].get("identified_gaps", []) if g["gap_id"] == selected), selected)
+    def get_confirmed_gap():
+        selection = load("user_gap_selection")
+        if not selection:
+            # Interactive CLI fallback if not cached (i.e., not running from Streamlit)
+            all_gaps = state.get("gaps", {}).get("identified_gaps", [])
+            selected_gap_id = state.get("gaps", {}).get("selected_gap", "")
+            
+            if gap_arg:
+                # User provided --gap arg
+                matched = next((g for g in all_gaps if g["gap_id"] == gap_arg), None)
+                if matched:
+                    selection = {
+                        "gap_id": gap_arg,
+                        "source": "user_selected",
+                        "description": matched["description"],
+                        "is_custom": False
+                    }
+                else:
+                    selection = {
+                        "gap_id": "custom",
+                        "source": "user_custom",
+                        "description": gap_arg,
+                        "is_custom": True
+                    }
+            else:
+                # Interactive prompt
+                print("\n[CLI] --- Action Required: Select a Research Gap ---")
+                for i, g in enumerate(all_gaps):
+                    rec = " [LLM Recommended]" if g["gap_id"] == selected_gap_id else ""
+                    print(f"{i+1}. [{g['gap_id']}] {g['description']}{rec}")
+                print(f"{len(all_gaps)+1}. Define Custom Gap")
+                
+                choice = input("\nEnter choice number: ").strip()
+                try:
+                    idx = int(choice) - 1
+                    if 0 <= idx < len(all_gaps):
+                        g = all_gaps[idx]
+                        selection = {
+                            "gap_id": g["gap_id"],
+                            "source": "user_selected" if g["gap_id"] != selected_gap_id else "llm_suggested",
+                            "description": g["description"],
+                            "is_custom": False
+                        }
+                    else:
+                        custom_txt = input("Enter your custom research gap description:\n").strip()
+                        selection = {
+                            "gap_id": "custom",
+                            "source": "user_custom",
+                            "description": custom_txt,
+                            "is_custom": True
+                        }
+                except ValueError:
+                    print("Invalid choice. Falling back to LLM recommended gap.")
+                    g = next(g for g in all_gaps if g["gap_id"] == selected_gap_id)
+                    selection = {
+                        "gap_id": g["gap_id"],
+                        "source": "llm_suggested",
+                        "description": g["description"],
+                        "is_custom": False
+                    }
+            
+            save("user_gap_selection", selection)
 
-    # Agent 4
-    t5 = CustomTask(
-        description="Methodology Design",
+        return selection["description"]
+
+    def get_challenger_gap():
+        all_gaps = state.get("gaps", {}).get("identified_gaps", [])
+        selection = load("user_gap_selection")
+        if not selection or not all_gaps: return None
+        
+        sorted_gaps = sorted(all_gaps, key=lambda g: g.get("priority_rank", 3))
+        if selection.get("source") == "user_custom":
+            return sorted_gaps[0]["description"]
+        else:
+            primary_id = selection.get("gap_id")
+            challengers = [g for g in sorted_gaps if g["gap_id"] != primary_id]
+            if challengers:
+                return challengers[0]["description"]
+        return None
+
+    # Agent 4-A (Primary)
+    t5a = CustomTask(
+        description="Methodology Design (Primary gap)",
         expected_output="Methodology JSON",
         agent=dummy_agent,
-        func=lambda: state.setdefault("methodology", load("methodology") or (save("methodology", run_methodology(get_gap_desc(), topic)) or delay()) or load("methodology"))
+        func=lambda: state.setdefault("methodology_a", load("methodology_a") or (save("methodology_a", run_methodology(get_confirmed_gap(), topic)) or delay()) or load("methodology_a"))
+    )
+
+    # Agent 4-B (Challenger)
+    t5b_meth = CustomTask(
+        description="Methodology Design (Challenger gap)",
+        expected_output="Methodology JSON",
+        agent=dummy_agent,
+        func=lambda: state.setdefault(
+            "methodology_b", 
+            load("methodology_b") or (
+                None if no_parallel or not get_challenger_gap() 
+                else (save("methodology_b", run_methodology(get_challenger_gap(), topic)) or delay())
+            ) or load("methodology_b")
+        )
+    )
+
+    # Methodology Evaluator
+    t5_eval = CustomTask(
+        description="Methodology Evaluation",
+        expected_output="Evaluated Methodology JSON",
+        agent=dummy_agent,
+        func=lambda: state.setdefault(
+            "methodology_eval", 
+            load("methodology_eval") or (
+                save("methodology_eval", run_evaluator(
+                    topic, 
+                    get_confirmed_gap(), 
+                    state.get("methodology_a"), 
+                    get_challenger_gap() if not no_parallel else None, 
+                    state.get("methodology_b")
+                )) or delay()
+            ) or load("methodology_eval")
+        )
     )
 
     t5b = CustomTask(
@@ -130,7 +240,7 @@ def run_pipeline(topic: str) -> dict:
             load("format_match") or (
                 save("format_match", run_format_matcher(
                     topic,
-                    state.get("methodology"),
+                    state.get("methodology_eval", {}).get("winning_methodology", {}),
                     formats,
                     state.get("user_format_override")
                 )) or delay()
@@ -143,7 +253,7 @@ def run_pipeline(topic: str) -> dict:
         description="Grant Writing",
         expected_output="Grant JSON",
         agent=dummy_agent,
-        func=lambda: state.setdefault("grant", load("grant") or (save("grant", run_grant(topic, get_gap_desc(), state.get("methodology"), state.get("format_match"))) or delay()) or load("grant"))
+        func=lambda: state.setdefault("grant", load("grant") or (save("grant", run_grant(topic, state.get("methodology_eval", {}).get("winning_gap_description", get_confirmed_gap()), state.get("methodology_eval", {}).get("winning_methodology", {}), state.get("format_match"))) or delay()) or load("grant"))
     )
 
     # Agent 6
@@ -157,7 +267,7 @@ def run_pipeline(topic: str) -> dict:
     # Orchestrate with CrewAI
     crew = Crew(
         agents=[dummy_agent],
-        tasks=[t1, t2, t2_gate, t3, t4, t4_gate, t5, t5b, t6, t7],
+        tasks=[t1, t2, t2_gate, t3, t4, t4_gate, t5a, t5b_meth, t5_eval, t5b, t6, t7],
         process=Process.sequential,
         verbose=True
     )
@@ -180,7 +290,9 @@ def run_pipeline(topic: str) -> dict:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="VMARO Orchestrator Pipeline")
     parser.add_argument("--topic", type=str, required=True, help="The research topic to analyze.")
+    parser.add_argument("--gap", type=str, required=False, help="Gap ID (e.g., G1) or a custom gap string.")
+    parser.add_argument("--no-parallel", action="store_true", help="Skip the challenger gap methodology and evaluation step.")
     args = parser.parse_args()
 
-    results = run_pipeline(args.topic)
+    results = run_pipeline(args.topic, gap_arg=args.gap, no_parallel=args.no_parallel)
     print("\nPipeline execution complete. Results saved to cache/ directory.")

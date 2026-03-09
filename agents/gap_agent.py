@@ -14,7 +14,13 @@ def run(tree: dict, trends: dict) -> dict:
 Return ONLY valid JSON matching this schema:
 {{
   "identified_gaps": [
-    {{ "gap_id": "G1", "description": "...", "why_underexplored": "..." }}
+    {{ 
+      "gap_id": "G1", 
+      "description": "...", 
+      "why_underexplored": "...",
+      "priority_rank": 1,
+      "feasibility_note": "..."
+    }}
   ],
   "selected_gap": "G1"
 }}"""

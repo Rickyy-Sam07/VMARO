@@ -5,6 +5,8 @@ import os
 import io
 import sys
 from datetime import datetime
+import plotly.graph_objects as go
+from streamlit_agraph import agraph, Node, Edge, Config
 from utils.cache import save, load, CACHE_DIR
 from utils.format_loader import load_all_formats, register_custom_format
 from agents.format_matcher import run as run_format_matcher
@@ -170,7 +172,7 @@ st.markdown("""
 
 # ── Session State Init ───────────────────────────────────────────────────────
 # All pipeline results are stored in session_state so they survive reruns.
-RESULT_KEYS = ["papers", "tree", "qg1", "trends", "gaps", "qg2", "methodology", "format_match", "grant", "novelty"]
+RESULT_KEYS = ["papers", "tree", "qg1", "trends", "gaps", "qg2", "user_gap_selection", "methodology_a", "methodology_b", "methodology_eval", "format_match", "grant", "novelty"]
 
 if "pipeline_run" not in st.session_state:
     st.session_state.pipeline_run = False
@@ -238,6 +240,115 @@ def format_debug_html(logs):
         )
     return '<div class="debug-console">' + ''.join(lines) + '</div>'
 
+def render_tree_agraph(tree: dict):
+    if not tree or not tree.get("themes"):
+        st.info("Tree not yet built — run the pipeline first.")
+        return
+        
+    nodes = []
+    edges = []
+    
+    root_val = tree.get("root", "Topic string")
+    root_label = root_val[:30] + "\\n" + root_val[30:] if len(root_val) > 30 else root_val
+    nodes.append(Node(
+        id="root",
+        label=root_label,
+        size=30,
+        color="#7c3aed",
+        font={"color": "#ffffff", "size": 14, "face": "Inter"},
+        shape="ellipse",
+        title=root_val
+    ))
+    
+    theme_colors = ["#6d28d9", "#1d4ed8", "#0f766e", "#b45309", "#be123c"]
+    paper_colors = ["#a78bfa", "#93c5fd", "#5eead4", "#fcd34d", "#fca5a5"]
+    
+    for i, theme in enumerate(tree.get("themes", [])):
+        theme_id = theme.get("theme_id", f"T{i}")
+        theme_name = theme.get("theme_name", "Theme")
+        papers = theme.get("papers", [])
+        
+        t_color = theme_colors[i % len(theme_colors)]
+        p_color = paper_colors[i % len(paper_colors)]
+        
+        t_label = theme_name[:25] + "\\n" + theme_name[25:] if len(theme_name) > 25 else theme_name
+        t_title = f"{theme_name} — {len(papers)} papers"
+        if len(papers) == 0:
+            t_title += " (no papers)"
+            
+        nodes.append(Node(
+            id=theme_id,
+            label=t_label,
+            size=22,
+            color=t_color,
+            font={"color": "#ffffff", "size": 12, "face": "Inter"},
+            shape="box",
+            title=t_title
+        ))
+        
+        edges.append(Edge(
+            source="root",
+            target=theme_id,
+            color="#4b5563",
+            width=2,
+            arrows="to",
+            smooth={"type": "cubicBezier"}
+        ))
+        
+        for p_idx, paper in enumerate(papers):
+            title = paper.get("title", "Untitled paper") if isinstance(paper, dict) else str(paper)
+            year = paper.get("year", "") if isinstance(paper, dict) else ""
+            summary = paper.get("summary", "") if isinstance(paper, dict) else ""
+            
+            p_label = title[:35] + "…" if len(title) > 35 else title
+            p_id = f"{theme_id}_{p_idx}"
+            
+            p_title = f"{title}\\n{year}\\n\\n{summary[:150]}…"
+            
+            nodes.append(Node(
+                id=p_id,
+                label=p_label,
+                size=14,
+                color=p_color,
+                font={"color": "#1f2937", "size": 11, "face": "Inter"},
+                shape="box",
+                title=p_title
+            ))
+            
+            edges.append(Edge(
+                source=theme_id,
+                target=p_id,
+                color="#374151",
+                width=1,
+                arrows="to",
+                smooth={"type": "cubicBezier"}
+            ))
+            
+    config = Config(
+        width="100%",
+        height=550,
+        directed=True,
+        physics=True,
+        hierarchical=True,
+        hierarchical_layout={
+            "enabled": True,
+            "direction": "UD",
+            "sortMethod": "directed",
+            "levelSeparation": 120,
+            "nodeSpacing": 100,
+            "treeSpacing": 150,
+            "blockShifting": True,
+            "edgeMinimization": True,
+            "parentCentralization": True,
+        },
+        nodeHighlightBehavior=True,
+        highlightColor="#a78bfa",
+        backgroundColor="rgba(0,0,0,0)",
+        stabilization=True,
+    )
+    
+    agraph(nodes=nodes, edges=edges, config=config)
+
 # Auto-load cached results on first visit
 for key in RESULT_KEYS:
     if key not in st.session_state:
@@ -266,7 +377,9 @@ STAGES = [
     ("", "Trend Analysis",          "trends"),
     ("", "Gap Identification",      "gaps"),
     ("", "Quality Gate 2",          "qg2"),
-    ("", "Methodology Design",     "methodology"),
+    ("", "Gap Selection",           "user_gap_selection"),
+    ("", "Methodology Design",     "methodology_a"),
+    ("", "Methodology Evaluation", "methodology_eval"),
     ("", "Format Selection",       "format_match"),
     ("", "Grant Writing",          "grant"),
     ("", "Novelty Scoring",        "novelty"),
@@ -589,36 +702,7 @@ if run_btn:
             set_stage("qg2", "error")
         st.session_state.stage_timings["qg2"] = round(time.time() - _t0, 1)
 
-        # ── Stage 7: Methodology ──
-        set_stage("methodology", "running")
-        update_progress(7, "Methodology Design")
-        st.write("**Designing experimental methodology** for the selected gap...")
-        _t0 = time.time()
-        try:
-            methodology = load("methodology")
-            if methodology and not is_fallback(methodology, ["suggested_datasets", "experimental_design"]):
-                st.write("  ↳ _Loaded from cache_")
-            else:
-                gaps_data = st.session_state.gaps or {}
-                selected_gap_id = gaps_data.get("selected_gap", "")
-                gap_desc = next(
-                    (g["description"] for g in gaps_data.get("identified_gaps", []) if g.get("gap_id") == selected_gap_id),
-                    selected_gap_id
-                )
-                methodology = run_methodology(gap_desc, topic)
-                if not is_fallback(methodology, ["suggested_datasets", "experimental_design"]):
-                    save("methodology", methodology)
-                time.sleep(1)
-            st.session_state.methodology = methodology
-            st.write(f"  ↳ Methodology ready — **{len(methodology.get('suggested_datasets', []))} datasets**, **{len(methodology.get('baseline_models', []))} baselines**")
-            set_stage("methodology", "complete")
-        except Exception as e:
-            st.write(f"  ↳ Error: {e}")
-            st.session_state.pipeline_errors["methodology"] = str(e)
-            set_stage("methodology", "error")
-        st.session_state.stage_timings["methodology"] = round(time.time() - _t0, 1)
-
-    # Phase 1 complete. Await user for Format Selection.
+    # Phase 1 complete. Await user for Gap Selection.
     st.session_state.phase = 2
     st.session_state.pipeline_run = True
 
@@ -626,6 +710,238 @@ if run_btn:
     sys.stdout = _original_stdout
 
 if st.session_state.get("phase") == 2:
+    st.markdown("---")
+    st.subheader("🎯 Select Research Gap")
+    
+    gaps_data = st.session_state.gaps or {}
+    all_gaps = gaps_data.get("identified_gaps", [])
+    llm_selected_id = gaps_data.get("selected_gap", "")
+    
+    if not all_gaps:
+        st.warning("No gaps found by Agent 3. Please restart the pipeline.")
+    else:
+        st.write("Agent 3 identified the following gaps. Select one to develop into a methodology, or define your own.")
+        
+        # We need a session state var for the radio selection to control the custom text area
+        if "gap_radio_choice" not in st.session_state:
+            st.session_state.gap_radio_choice = llm_selected_id
+            
+        # Build options
+        gap_options = [g["gap_id"] for g in all_gaps] + ["custom"]
+        
+        def format_gap_label(gid):
+            if gid == "custom":
+                return "Define your own gap"
+            g = next(x for x in all_gaps if x["gap_id"] == gid)
+            rank = g.get("priority_rank", 3)
+            stars = "★" * (4 - rank) + "☆" * (rank - 1) if isinstance(rank, int) and 1 <= rank <= 3 else ""
+            rec = " 💡 (LLM Recommended)" if gid == llm_selected_id else ""
+            return f"[{gid} {stars}] {g['description']}{rec}"
+            
+        selected_gap_id = st.radio(
+            "Identified Gaps:",
+            options=gap_options,
+            format_func=format_gap_label,
+            key="gap_radio_choice"
+        )
+        
+        # Display feasibility note for the selected predefined gap
+        if selected_gap_id != "custom":
+            g = next((x for x in all_gaps if x["gap_id"] == selected_gap_id), None)
+            if g and g.get("feasibility_note"):
+                st.caption(f"**Feasibility:** {g['feasibility_note']}")
+                
+        custom_gap_text = ""
+        if selected_gap_id == "custom":
+            custom_gap_text = st.text_area(
+                "Custom Gap Description",
+                placeholder="Describe your research gap here...",
+                help="Agent 4 will treat this as authoritative."
+            )
+            
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            confirm_gap = st.button("Confirm Gap →", type="primary", disabled=(selected_gap_id == "custom" and not custom_gap_text.strip()))
+            
+        if confirm_gap:
+            if selected_gap_id == "custom":
+                selection = {
+                    "gap_id": "custom",
+                    "source": "user_custom",
+                    "description": custom_gap_text.strip(),
+                    "is_custom": True
+                }
+            else:
+                g = next(x for x in all_gaps if x["gap_id"] == selected_gap_id)
+                selection = {
+                    "gap_id": g["gap_id"],
+                    "source": "user_selected" if g["gap_id"] != llm_selected_id else "llm_suggested",
+                    "description": g["description"],
+                    "is_custom": False
+                }
+            
+            save("user_gap_selection", selection)
+            st.session_state.user_gap_selection = selection
+            set_stage("user_gap_selection", "complete")
+            st.session_state.phase = 3
+            st.rerun()
+
+if st.session_state.get("phase") == 3:
+    # ── Stage 7 & Eval: Methodology ──
+    from agents.methodology_agent import run as run_methodology
+    from agents.methodology_evaluator import run as run_evaluator
+    
+    _original_stdout = sys.stdout
+    sys.stdout = StreamCapture(_original_stdout)
+
+    progress_bar = st.progress(0, text="Designing Methodologies...")
+    status_container = st.status("🚀 **Generating Parallel Methodologies**", expanded=True)
+    total = len(STAGES)
+    
+    def update_progress(step_idx, label):
+        pct = int((step_idx / total) * 100)
+        progress_bar.progress(pct, text=f"Stage {step_idx}/{total} — {label}")
+
+    with status_container:
+        set_stage("methodology_a", "running")
+        update_progress(7, "Methodology Design (Primary & Challenger)")
+        
+        st.write("**Designing experimental methodology** for primary gap...")
+        _t0 = time.time()
+        try:
+            methodology_a = load("methodology_a")
+            if methodology_a and not is_fallback(methodology_a, ["suggested_datasets", "experimental_design"]):
+                st.write("  ↳ _Primary loaded from cache_")
+            else:
+                user_gap = st.session_state.user_gap_selection or load("user_gap_selection")
+                gap_desc = user_gap["description"] if user_gap else ""
+                topic = st.session_state.pipeline_topic
+                methodology_a = run_methodology(gap_desc, topic)
+                if not is_fallback(methodology_a, ["suggested_datasets", "experimental_design"]):
+                    save("methodology_a", methodology_a)
+                time.sleep(1)
+            st.session_state.methodology_a = methodology_a
+            set_stage("methodology_a", "complete")
+        except Exception as e:
+            st.write(f"  ↳ Error in Primary: {e}")
+            st.session_state.pipeline_errors["methodology_a"] = str(e)
+            set_stage("methodology_a", "error")
+            
+        st.write("**Designing methodology for challenger gap**...")
+        try:
+            methodology_b = load("methodology_b")
+            if methodology_b:
+                st.write("  ↳ _Challenger loaded from cache_")
+            else:
+                # Figure out challenger
+                all_gaps = st.session_state.gaps.get("identified_gaps", []) if st.session_state.gaps else []
+                user_gap = st.session_state.user_gap_selection or load("user_gap_selection")
+                challenger_desc = None
+                if user_gap and all_gaps:
+                    sorted_gaps = sorted(all_gaps, key=lambda g: g.get("priority_rank", 3))
+                    if user_gap.get("source") == "user_custom":
+                        challenger_desc = sorted_gaps[0]["description"]
+                    else:
+                        prim_id = user_gap.get("gap_id")
+                        chs = [g for g in sorted_gaps if g["gap_id"] != prim_id]
+                        if chs:
+                            challenger_desc = chs[0]["description"]
+                
+                if not challenger_desc:
+                    st.write("  ↳ _No challenger gap available, skipping._")
+                    methodology_b = None
+                else:
+                    topic = st.session_state.pipeline_topic
+                    methodology_b = run_methodology(challenger_desc, topic)
+                    if not is_fallback(methodology_b, ["suggested_datasets", "experimental_design"]):
+                        save("methodology_b", methodology_b)
+                    time.sleep(1)
+            st.session_state.methodology_b = methodology_b
+        except Exception as e:
+            st.write(f"  ↳ Error in Challenger: {e}")
+            methodology_b = None
+            
+        # Evaluator
+        set_stage("methodology_eval", "running")
+        update_progress(8, "Methodology Evaluation")
+        st.write("**Evaluating competing methodologies**...")
+        try:
+            methodology_eval = load("methodology_eval")
+            if methodology_eval:
+                st.write("  ↳ _Evaluator loaded from cache_")
+            else:
+                topic = st.session_state.pipeline_topic
+                user_gap = st.session_state.user_gap_selection or load("user_gap_selection")
+                primary_desc = user_gap["description"] if user_gap else ""
+                
+                challenger_desc = ""
+                if methodology_b:
+                    all_gaps = st.session_state.gaps.get("identified_gaps", []) if st.session_state.gaps else []
+                    sorted_gaps = sorted(all_gaps, key=lambda g: g.get("priority_rank", 3))
+                    if user_gap.get("source") == "user_custom":
+                        challenger_desc = sorted_gaps[0]["description"]
+                    else:
+                        prim_id = user_gap.get("gap_id")
+                        chs = [g for g in sorted_gaps if g["gap_id"] != prim_id]
+                        if chs:
+                            challenger_desc = chs[0]["description"]
+                
+                methodology_eval = run_evaluator(
+                    topic, 
+                    primary_desc, 
+                    st.session_state.methodology_a, 
+                    challenger_desc, 
+                    methodology_b
+                )
+                save("methodology_eval", methodology_eval)
+            st.session_state.methodology_eval = methodology_eval
+            set_stage("methodology_eval", "complete")
+        except Exception as e:
+            st.write(f"  ↳ Evaluator error: {e}")
+            st.session_state.pipeline_errors["methodology_eval"] = str(e)
+            set_stage("methodology_eval", "error")
+
+        st.session_state.stage_timings["methodology_a"] = round(time.time() - _t0, 1)
+
+    # Phase 3 complete. Await Format Selection.
+    st.session_state.phase = 4
+    
+    sys.stdout = _original_stdout
+    st.rerun()
+
+if st.session_state.get("phase") == 4:
+    # Render Parallel Evaluation Expander if it ran
+    if "methodology_eval" in st.session_state and st.session_state.methodology_eval:
+        mev = st.session_state.methodology_eval
+        if mev.get("parallel_was_run"):
+            with st.expander("▼ Methodology Evaluation (parallel run)", expanded=True):
+                st.markdown("Two methodologies were generated in parallel. The stronger one was selected automatically.")
+                
+                win_label = "A" if mev.get("winner") == "A" else "B"
+                a_score = mev.get("methodology_a_score", 0)
+                b_score = mev.get("methodology_b_score", 0)
+                
+                st.markdown(f"**Primary gap methodology (A)** — score: {a_score:.2f} {'✓ **WINNER**' if win_label == 'A' else ''}")
+                st.markdown(f"**Challenger gap methodology (B)** — score: {b_score:.2f} {'✓ **WINNER**' if win_label == 'B' else ''}")
+                
+                st.markdown("**Evaluator reasoning:**")
+                st.info(mev.get("reasoning", ""))
+                
+                if st.button("Override — use Challenger instead", key="override_eval"):
+                    # Swap the winner directly in cache/session state
+                    mev["winner"] = "B" if win_label == "A" else "A"
+                    mev["winning_methodology"] = st.session_state.methodology_b if win_label == "A" else st.session_state.methodology_a
+                    save("methodology_eval", mev)
+                    st.session_state.methodology_eval = mev
+                    # Clear downstream caches
+                    for k in ["format_match", "grant", "novelty"]:
+                        st.session_state[k] = None
+                        import os, ssl
+                        p = f"cache/{k}.json"
+                        if os.path.exists(p): os.remove(p)
+                    st.rerun()
+        else:
+            st.caption("Single methodology generated — parallel run skipped (insufficient distinct gaps).")
     st.markdown("---")
     st.subheader("📋 Select Grant Format")
     
@@ -638,7 +954,7 @@ if st.session_state.get("phase") == 2:
             
             fm = run_format_matcher(
                 st.session_state.pipeline_topic,
-                st.session_state.get("methodology", {}),
+                st.session_state.get("methodology_eval", {}).get("winning_methodology", {}),
                 st.session_state.formats,
                 None
             )
@@ -694,17 +1010,17 @@ if st.session_state.get("phase") == 2:
 
     generate_btn = st.button("Generate Grant Proposal →", type="primary", use_container_width=True)
 
-if st.session_state.get("phase") == 2 and globals().get('generate_btn'):
+if st.session_state.get("phase") == 4 and globals().get('generate_btn'):
     from agents.grant_agent import run as run_grant
     from agents.novelty_agent import run as run_novelty
-    
+
     _original_stdout = sys.stdout
     sys.stdout = StreamCapture(_original_stdout)
 
     progress_bar = st.progress(0, text="Drafting Proposal...")
     status_container = st.status("🚀 **Generating Grant & Assessing Novelty**", expanded=True)
     total = len(STAGES)
-    
+
     def update_progress(step_idx, label):
         pct = int((step_idx / total) * 100)
         progress_bar.progress(pct, text=f"Stage {step_idx}/{total} — {label}")
@@ -713,7 +1029,7 @@ if st.session_state.get("phase") == 2 and globals().get('generate_btn'):
         # Re-save format match with user override applied
         fm = run_format_matcher(
             st.session_state.pipeline_topic,
-            st.session_state.get("methodology", {}),
+            st.session_state.get("methodology_eval", {}).get("winning_methodology", {}),
             st.session_state.formats,
             st.session_state.user_format_override
         )
@@ -731,13 +1047,10 @@ if st.session_state.get("phase") == 2 and globals().get('generate_btn'):
             if grant and not is_fallback(grant, ["problem_statement", "proposed_methodology"]):
                 st.write("  ↳ _Loaded from cache_")
             else:
-                gaps_data = st.session_state.gaps or {}
-                selected_gap_id = gaps_data.get("selected_gap", "")
-                gap_desc = next(
-                    (g["description"] for g in gaps_data.get("identified_gaps", []) if g.get("gap_id") == selected_gap_id),
-                    selected_gap_id
-                )
-                meth_data = st.session_state.methodology or {}
+                topic = st.session_state.pipeline_topic
+                user_gap_selection = st.session_state.get("user_gap_selection", {}) or load("user_gap_selection") or {}
+                gap_desc = st.session_state.get("methodology_eval", {}).get("winning_gap_description", user_gap_selection.get("description", ""))
+                meth_data = st.session_state.get("methodology_eval", {}).get("winning_methodology", {})
                 format_match = st.session_state.format_match or {}
                 grant = run_grant(topic, gap_desc, meth_data, format_match)
                 if not is_fallback(grant, ["problem_statement", "proposed_methodology"]):
@@ -752,9 +1065,9 @@ if st.session_state.get("phase") == 2 and globals().get('generate_btn'):
             set_stage("grant", "error")
         st.session_state.stage_timings["grant"] = round(time.time() - _t0, 1)
 
-        # ── Stage 9: Novelty ──
+        # ── Stage 10: Novelty ──
         set_stage("novelty", "running")
-        update_progress(9, "Novelty Scoring")
+        update_progress(10, "Novelty Scoring")
         st.write("**Scoring novelty** against existing literature...")
         _t0 = time.time()
         try:
@@ -840,23 +1153,24 @@ if has_results:
     # ── Tab 2: Tree Index ────────────────────────────────────────────────────
     with tabs[1]:
         tree_data = st.session_state.tree or {}
-        if tree_data:
-            st.markdown("## Thematic Tree Index")
-            st.markdown(f"**Root:** {tree_data.get('root', 'Unknown')}")
+        if tree_data and tree_data.get("themes"):
+            render_tree_agraph(tree_data)
+            
+            # Emerging directions below the chart
+            directions = tree_data.get("emerging_directions", [])
+            if directions:
+                st.markdown("#### Emerging Directions")
+                pills_html = []
+                for d in directions:
+                    pills_html.append(f'<span style="background:#3b0764; color:#e9d5ff; padding:4px 12px; border-radius:20px; font-size:0.85rem; margin:4px; display:inline-block;">{d}</span>')
+                st.markdown("".join(pills_html), unsafe_allow_html=True)
+            
+            st.markdown("---")
 
-            for theme in tree_data.get("themes", []):
-                with st.expander(f"{theme.get('theme_id')}: {theme.get('theme_name')}", expanded=True):
-                    for idx, p in enumerate(theme.get('papers', [])):
-                        title = p.get('title', p) if isinstance(p, dict) else p
-                        year = p.get('year', '') if isinstance(p, dict) else ''
-                        year_str = f" ({year})" if year else ""
-                        st.markdown(f"&nbsp;&nbsp;&nbsp;{idx+1}. {title}{year_str}")
-
-            st.markdown("### Emerging Directions")
-            for d in tree_data.get("emerging_directions", []):
-                st.markdown(f"- {d}")
+            with st.expander("Raw tree JSON", expanded=False):
+                st.json(tree_data)
         else:
-            st.info("No tree data available. Run the pipeline to generate results.")
+            st.info("Tree not yet built — run the pipeline first.")
 
     # ── Tab 3: Trends & Gaps ─────────────────────────────────────────────────
     with tabs[2]:
@@ -894,33 +1208,49 @@ if has_results:
 
     # ── Tab 4: Methodology ───────────────────────────────────────────────────
     with tabs[3]:
-        meth = st.session_state.methodology or {}
-        if meth:
-            st.markdown("## Experimental Methodology")
+        mev = st.session_state.get("methodology_eval", {})
+        meth_a = st.session_state.get("methodology_a", {})
+        meth_b = st.session_state.get("methodology_b", {})
 
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.markdown("### Datasets")
-                for d in meth.get("suggested_datasets", []):
-                    st.markdown(f"- {d}")
-            with c2:
-                st.markdown("### Metrics")
-                for m in meth.get("evaluation_metrics", []):
-                    st.markdown(f"- {m}")
-            with c3:
-                st.markdown("### Baselines")
-                for b in meth.get("baseline_models", []):
-                    st.markdown(f"- {b}")
+        def render_meth(m):
+            if not m:
+                st.info("No data available.")
+                return
 
-            st.markdown("### Experimental Design")
-            st.markdown(meth.get("experimental_design", "_No design generated._"))
+            st.markdown("**Datasets:** " + ", ".join(m.get("suggested_datasets", [])) if m.get("suggested_datasets") else "**Datasets:** None suggested")
+            st.markdown("**Metrics:** " + ", ".join(m.get("evaluation_metrics", [])) if m.get("evaluation_metrics") else "**Metrics:** None suggested")
+            st.markdown("**Baselines:** " + ", ".join(m.get("baseline_models", [])) if m.get("baseline_models") else "**Baselines:** None suggested")
 
-            st.markdown("### Tools & Frameworks")
-            tools = meth.get("tools_and_frameworks", [])
+            st.markdown("**Experimental Design**")
+            st.markdown(m.get("experimental_design", "_No design generated._"))
+
+            st.markdown("**Tools & Frameworks**")
+            tools = m.get("tools_and_frameworks", [])
             if tools:
                 st.markdown(" · ".join([f"`{t}`" for t in tools]))
+
+        if mev and mev.get("parallel_was_run") and meth_a and meth_b:
+            st.markdown("## Parallel Methodologies Comparison")
+            colA, colB = st.columns(2)
+            
+            with colA:
+                st.markdown("### Methodology A (Primary)")
+                if mev.get("winner") == "A":
+                    st.success("Currently Selected (Winner)")
+                render_meth(meth_a)
+                
+            with colB:
+                st.markdown("### Methodology B (Challenger)")
+                if mev.get("winner") == "B":
+                    st.success("Currently Selected (Winner)")
+                render_meth(meth_b)
         else:
-            st.info("No methodology data available. Run the pipeline to generate results.")
+            meth = mev.get("winning_methodology") or meth_a or {}
+            if meth:
+                st.markdown("## Experimental Methodology")
+                render_meth(meth)
+            else:
+                st.info("No methodology data available. Run the pipeline to generate results.")
 
     # ── Tab 5: Grant Proposal ────────────────────────────────────────────────
     with tabs[4]:
