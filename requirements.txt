@@ -6,4 +6,4 @@ groq
 beautifulsoup4
 scholarly
 plotly
-streamlit-agraph==0.0.45
+streamlit-agraph
