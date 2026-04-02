@@ -1,202 +1,152 @@
-# VMARO
-### Vectorless Multi-Agent Research Orchestrator
+# 🔬 VMARO: Vectorless Multi-Agent Research Orchestrator
 
-> Feed it a research topic. Get back a grant proposal, a thematic literature tree, and a novelty score — no vector database, no embeddings, zero cost.
+> Feed it a research topic -> Get back a comprehensive thematic tree, parallel methodology evaluations, and a structured, funding-ready grant proposal evaluated for novelty. All without a vector database or embeddings layer.
+
+<div align="center">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg">
+  <img src="https://img.shields.io/badge/Agents-CrewAI-orange.svg">
+  <img src="https://img.shields.io/badge/Powered%20By-Gemini%20%26%20Groq-purple.svg">
+  <img src="https://img.shields.io/badge/UI-Streamlit-red.svg">
+</div>
 
 ---
 
-## What It Does
+## 🚀 Overview
 
-VMARO is a 6-agent sequential pipeline built with CrewAI and Groq. You give it a research topic; it intelligently retrieves real papers across multiple academic databases (Semantic Scholar, arXiv, CrossRef, OpenAlex, PubMed), auto-deduplicates them, clusters them into a thematic tree, identifies research gaps, designs a methodology, writes a funding-ready grant proposal, and scores how novel that proposal is against the existing literature.
+VMARO is an advanced **8-stage, multi-agent AI pipeline** orchestrating academic research and grant writing. Instead of the traditional, generic RAG mechanism (chunking texts and vector similarity), VMARO utilizes LLM-native structural synthesis to construct an interpretable "**Thematic Tree**" directly from multiple live academic sources.
 
-The "vectorless" part is the point: instead of cosine similarity over embeddings, the pipeline uses an LLM-native hierarchical tree to navigate the literature. More interpretable, zero infrastructure.
+The multi-model engine sequentially analyzes literature, detects emerging macro-trends, isolates critical research gaps, pits multiple methodologies against each other in a parallel "challenger" phase, formats the outcomes to specific institutional guidelines (e.g., NIH, NSF, ERC), and finally generates the full-bodied proposal with a quantified novelty score and PDF/LaTeX exports.
 
-```
+---
+
+## ✨ Key Features & Architecture Improvements
+
+- 🌲 **Vectorless Navigation**: No FAISS, no ChromaDB. Replaces black-box semantic retrieval with direct semantic clustering, constructing a visual Thematic Tree directly from high-signal abstracts and metadata.
+- 🚦 **Intelligent Quality Gates**: Built-in "LLM-as-a-Judge" layers validate outputs iteratively between stages. If data is shallow or hallucinatory, the gate will flag it (`PASS`, `REVISE`, `FAIL`).
+- ⚔️ **Parallel Methodology Evaluation**: VMARO doesn't just pick the first idea. It drafts a primary methodology, constructs a challenger counter-approach, and objectively evaluates which design has stronger statistical power and feasibility.
+- 📑 **Institutional Format Matching**: Automatically restructures and tunes rhetorical tone to align with rigorous schemas (e.g., NSF, NIH, ERC) using a dedicated Format Matcher. You can upload custom JSON format templates as well.
+- 🔄 **Stateful Resiliency**: All outputs cache natively via `utils/cache.py`. Process interrupted? The pipeline resumes immediately from the last checkpoint to save API credits.
+
+---
+
+## 🧠 The 8-Stage Pipeline
+
+```text
 [Research Topic]
-      ↓
-  Agent 1 — Literature Mining        Multi-API Fetcher + Groq
-      ↓
-  Tree Index Builder                 Groq  [above spec]
-      ↓
-  [Quality Gate]                     PASS / REVISE / FAIL
-      ↓
-  Agent 2 — Trend Analysis           Groq
-      ↓
-  Agent 3 — Gap Identification       Groq
-      ↓
-  [Quality Gate]                     PASS / REVISE / FAIL
-      ↓
-  Agent 4 — Methodology Design       Groq
-      ↓
-  Agent 5 — Grant Writing            Groq
-      ↓
-  Agent 6 — Novelty Scoring          Groq  (2-step)
-      ↓
-  [Streamlit Dashboard]
+       ↓
+ 1️⃣  Literature Mining         (Multi-API Fetcher: arXiv, PubMed, Scholar + LLM)
+       ↓
+ 2️⃣  Thematic Tree Builder     (Clusters into hierarchical themes) → 🛡️ [Quality Gate 1]
+       ↓
+ 3️⃣  Trend Analysis            (Detects dominant/emerging signals)
+       ↓
+ 4️⃣  Gap Identification        (Auto-detects and ranks multiple research gaps) → 🛡️ [Quality Gate 2]
+       ↓
+     [User Intervenes: Selects Gap or Defines Custom]
+       ↓
+ 5️⃣  Methodology Evaluator     (Drafts Primary vs Challenger Methodologies -> Selects Winner)
+       ↓
+ 6️⃣  Format Selection          (Matches winning approach to grant styles + User Override)
+       ↓
+ 7️⃣  Grant Writing             (Detailed content generation constrained by format schema)
+       ↓
+ 8️⃣  Novelty Scoring           (Coarse tree pass → Deep paper comparison → 0-100 Score)
+       ↓
+[Streamlit Dashboard / LaTeX PDF Export]
 ```
 
 ---
 
-## Quickstart
+## 🛠️ Quickstart
 
-### 1. Clone & install
+### 1. Clone & Environment
 
 ```bash
 git clone https://github.com/your-org/vmaro.git
 cd vmaro
+
+# Create and sync virtual environment
+python -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Set up API keys
+### 2. Configure API Keys
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and add your Groq API keys. All three are free — create accounts at [Groq Console](https://console.groq.com):
+Edit the `.env` to map your respective accounts. VMARO leverages multiple providers (Gemini / Groq / AWS) dynamically, handling round-robin request pools to bypass restrictive free-tier rate limits.
 
+```ini
+# Foundational LLMs
+GROQ_API_KEY_1=your_key
+GEMINI_4_AWS_KEY_1=your_key
+
+# External sources (optional, standard use bypasses these if not provided)
+SEMANTIC_SCHOLAR_KEY=
 ```
-GROQ_API_KEY_1=your_first_key
-GROQ_API_KEY_2=your_second_key
-GROQ_API_KEY_3=your_third_key
-```
 
-You do not need API keys for the academic databases for standard use.
+### 3. Run via CLI
 
-### 3. Run the pipeline (CLI)
+To let the automated orchestrator handle everything programmatically:
 
 ```bash
-python main.py --topic "Federated Learning in Healthcare"
+python main.py --topic "Federated Learning in Bioinformatics"
 ```
 
-All agent outputs are saved to `cache/` after each step. If a run fails mid-pipeline, re-running resumes from the last successful checkpoint — no wasted API credits.
+*Want to bypass the parallel methodology evaluation? Add the `--no-parallel` flag.*
 
-### 4. Run the UI
+### 4. Interactive UI Mode (Recommended)
+
+To utilize the dynamic visualizer (Agraph), manual gap selection intervention, and one-click Format/PDF generation:
 
 ```bash
 streamlit run app.py
 ```
-
-Open `http://localhost:8501`, enter a topic, and click **Run Analysis**.
-
----
-
-## Architecture
-
-### The 6 Agents
-
-| # | Agent | Input | Output |
-|---|-------|-------|--------|
-| 1 | Literature Mining | Research topic string | Schema 1 — papers JSON |
-| 2 | Trend Analysis | Schema 2 — tree | Dominant clusters + emerging trends |
-| 3 | Gap Identification | Schema 2 + trends | Schema 3 — gaps JSON |
-| 4 | Methodology Design | Selected gap | Schema 4 — methodology JSON |
-| 5 | Grant Writing | Gap + methodology | Schema 5 — grant proposal JSON |
-| 6 | Novelty Scoring | Grant + tree | Schema 6 — novelty score JSON |
-
-### Above-Spec Additions
-
-**Tree Index Builder** sits between Agent 1 and Agent 2. Rather than passing Agent 2 a flat list of papers, the Tree Builder first clusters them into 3–5 thematic groups using Groq's Moonshot model. Agent 2 then operates on a structured hierarchy instead of a raw list — producing more coherent trend analysis and better-scoped gap identification downstream.
-
-**LLM Quality Gates** run after Agent 1 and after Agent 3 — the two stages most likely to produce shallow output that silently degrades everything downstream. Each gate makes a single Groq API call and returns `PASS`, `REVISE`, or `FAIL` with a confidence score. In demo mode the gate logs its decision to the terminal and does not block the pipeline, keeping runtime fast while remaining visible as a talking point.
-
-### Why Vectorless?
-
-Traditional RAG pipelines need FAISS or ChromaDB, embedding models, and infrastructure to keep indexes fresh. The Tree Index Builder replaces similarity search with LLM-native hierarchical navigation: Groq's Moonshot reads the papers and constructs the theme tree directly. The result is more interpretable (you can read the tree), requires zero infrastructure, and runs entirely within Groq's free tier.
-
-### Agent 1 — Two-Pass Design
-
-Literature Mining is split into two distinct passes to prevent LLM hallucination of paper metadata (a known failure mode of prompt-based retrieval):
-
-- **Pass 1 — Retrieval:** A Multi-API Fetcher intelligently routes queries to Semantic Scholar, arXiv, CrossRef, OpenAlex, and PubMed based on topic keywords. It fetches real papers with real metadata and auto-deduplicates them. No LLM involved.
-- **Pass 2 — Intelligence:** Groq's Moonshot reads the abstracts and writes summaries + extracts contributions. No retrieval involved.
-
-Separating these responsibilities means the pipeline never invents papers that don't exist.
-
-### Agent 6 — Two-Step Novelty Scoring
-
-Novelty scoring runs in two internally-chained steps to keep each API call well-scoped:
-
-- **Step 1 — Tree Navigation:** The model reads only the theme names and identifies which themes are most relevant to the grant proposal. Fast, low-token.
-- **Step 2 — Paper Comparison:** The model reads the full grant proposal against only the papers from the selected themes (3–5 papers maximum). Rates novelty 0–100 with justification.
-
-This mirrors how human peer reviewers assess novelty: coarse pass first, deep read second.
+Open **`http://localhost:8501`** in your browser.
 
 ---
 
-## API & Cost
+## 📁 Repository Structure
 
-| Task | API | Notes |
-|------|-----|-------|
-| Paper retrieval | Semantic Scholar, arXiv, PubMed, CrossRef, OpenAlex | Free, automatic topic-based routing, automatic deduplication |
-| All LLM tasks | Groq Moonshot (`moonshotai/kimi-k2-instruct-0905`) | Free tier |
-
-The pipeline makes approximately 10 LLM calls per run. With 3 Groq keys (one per team member), the API limits are sufficient for development and demo use.
-
-Key rotation is handled automatically in `utils/schema.py` via a round-robin pool.
-
----
-
-## Repo Structure
-
-```
+```text
 vmaro/
 ├── agents/
-│   ├── literature_agent.py     # Agent 1 — Multi-API Fetcher + Groq
-│   ├── tree_agent.py           # Tree Index Builder (above spec)
-│   ├── trend_agent.py          # Agent 2
-│   ├── gap_agent.py            # Agent 3
-│   ├── methodology_agent.py    # Agent 4
-│   ├── grant_agent.py          # Agent 5
-│   └── novelty_agent.py        # Agent 6 (two-step)
+│   ├── literature_agent.py      # Agent 1: Multi-API Fetch & Consolidate
+│   ├── tree_agent.py            # Agent 2: Hierarchical Clustinger
+│   ├── trend_agent.py           # Agent 3: Macro-Signals Identification
+│   ├── gap_agent.py             # Agent 4: Target Discovery
+│   ├── methodology_agent.py     # Agent 5a: Method generation
+│   ├── methodology_evaluator.py # Agent 5b: Primary vs Challenger eval
+│   ├── format_matcher.py        # Agent 6: Matching proposal formats
+│   ├── grant_agent.py           # Agent 7: Format-compliant Grant Writing
+│   └── novelty_agent.py         # Agent 8: Score validation
 ├── utils/
-│   ├── multi_api_fetcher.py    # Cross-database paper fetching & deduplication
-│   ├── schema.py               # JSON validators + clean_json_response() + key rotation
-│   ├── cache.py                # Checkpoint cache (writes to cache/ after each agent)
-│   └── quality_gate.py         # Reusable LLM quality gate
-├── mock_data/                  # Static JSON fixtures for all 6 schemas
-├── cache/                      # Runtime checkpoints (auto-created, gitignored)
-├── main.py                     # CrewAI orchestrator
-├── app.py                      # Streamlit dashboard
-├── requirements.txt
-├── .env.example
-└── README.md
+│   ├── multi_api_fetcher.py     # Scholar, PubMed, Arxiv, CrossRef multiplexer
+│   ├── schema.py                # Pydantic-like validations, LLM cleanup & Key rotation
+│   ├── quality_gate.py          # Quality evaluator middleware
+│   ├── format_loader.py         # Loads and registers JSON schemas for Grants
+│   └── latex_exporter.py        # Converts generated outputs to PDF / Tex
+├── app.py                       # Modern Streamlit UI application
+├── main.py                      # CrewAI Orchestrator Execution script
+└── ...
 ```
 
 ---
 
-## Stability
+## 📫 Capabilities vs Limitations
 
-- Paper corpus is capped at **8–15 papers per run** to prevent token overflow
-- Every API call is wrapped in `try/except` — the pipeline returns a fallback response and never crashes
-- Groq occasionally wraps JSON output in markdown fences — `clean_json_response()` in `utils/schema.py` strips these before every parse, with one automatic retry on malformed output
-- CrewAI is pinned to a specific version in `requirements.txt` — it has frequent breaking changes between minor versions
+**Capabilities**:
+- **Deduplication**: Multi-API fetches eliminate cross-source duplicates.
+- **Robust Fail-Safes**: All keys are iterated cyclically. `clean_json_response()` parses markdown-polluted LLM responses flawlessly.
 
----
-
-## Limitations & Future Work
-
-**Automated gap selection.** The Gap Identification Agent currently auto-selects a gap. A natural UI extension would let the user review all identified gaps and choose which one to build the methodology and proposal around — making VMARO interactive rather than fully automated.
+**Future Items**:
+- Currently capped at ~15-20 papers max to avoid token overflow logic limitations on the base endpoints.
+- Deeper automated web-searching in the Methodology generation phase for specific up-to-date Python/R package implementations.
 
 ---
 
-## Team
-
-| Person | Owns |
-|--------|------|
-| Person A | Agent 1 · Tree Index Builder · `utils/` · `main.py` · mock data |
-| Person B | Agent 2 · Agent 3 · Agent 4 |
-| Person C | Agent 5 · Agent 6 · Streamlit UI |
-
----
-
-## License
-
-MIT
-# VMARO
-# VMARO
-# VMARO
-# VMARO
-# VMARO
-# VMARO
-# VMARO
+## 📝 License
+MIT License. Feel free to fork, expand, and commercialize.
