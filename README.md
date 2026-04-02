@@ -9,6 +9,11 @@
   <img src="https://img.shields.io/badge/UI-Streamlit-red.svg">
 </div>
 
+<br>
+<p align="center">
+  <img src="image/datapipeline.png" alt="Data Pipeline" width="800">
+</p>
+
 ---
 
 ## 🚀 Overview
@@ -17,6 +22,10 @@ VMARO is an advanced **8-stage, multi-agent AI pipeline** orchestrating academic
 
 The multi-model engine sequentially analyzes literature, detects emerging macro-trends, isolates critical research gaps, pits multiple methodologies against each other in a parallel "challenger" phase, formats the outcomes to specific institutional guidelines (e.g., NIH, NSF, ERC), and finally generates the full-bodied proposal with a quantified novelty score and PDF/LaTeX exports.
 
+<p align="center">
+  <img src="image/architechture.png" alt="System Architecture" width="800">
+</p>
+
 ---
 
 ## ✨ Key Features & Architecture Improvements
@@ -24,6 +33,11 @@ The multi-model engine sequentially analyzes literature, detects emerging macro-
 - 🌲 **Vectorless Navigation**: No FAISS, no ChromaDB. Replaces black-box semantic retrieval with direct semantic clustering, constructing a visual Thematic Tree directly from high-signal abstracts and metadata.
 - 🚦 **Intelligent Quality Gates**: Built-in "LLM-as-a-Judge" layers validate outputs iteratively between stages. If data is shallow or hallucinatory, the gate will flag it (`PASS`, `REVISE`, `FAIL`).
 - ⚔️ **Parallel Methodology Evaluation**: VMARO doesn't just pick the first idea. It drafts a primary methodology, constructs a challenger counter-approach, and objectively evaluates which design has stronger statistical power and feasibility.
+
+<p align="center">
+  <img src="image/agent_synchornization.png" alt="Agent Synchronization" width="600">
+</p>
+
 - 📑 **Institutional Format Matching**: Automatically restructures and tunes rhetorical tone to align with rigorous schemas (e.g., NSF, NIH, ERC) using a dedicated Format Matcher. You can upload custom JSON format templates as well.
 - 🔄 **Stateful Resiliency**: All outputs cache natively via `utils/cache.py`. Process interrupted? The pipeline resumes immediately from the last checkpoint to save API credits.
 
@@ -54,6 +68,39 @@ The multi-model engine sequentially analyzes literature, detects emerging macro-
        ↓
 [Streamlit Dashboard / LaTeX PDF Export]
 ```
+
+### Dashboard Workflows in Action
+
+<details>
+<summary><b>1. Literature Mining & Corpus Generation</b></summary>
+<br>
+<img src="image/usecase1_literature_corpus.png" alt="Literature Mining">
+</details>
+
+<details>
+<summary><b>2. Thematic Tree Synthesis</b></summary>
+<br>
+<img src="image/usecase1_thematicTree.png" alt="Thematic Tree">
+</details>
+
+<details>
+<summary><b>3. Gap Identification & Selection</b></summary>
+<br>
+<img src="image/usecase1_GAPSELECTION.png" alt="Gap Selection">
+</details>
+
+<details>
+<summary><b>4. Parallel Methodology Evaluation</b></summary>
+<br>
+<img src="image/usecase1_methodology.png" alt="Methodology Evaluation">
+</details>
+
+<details>
+<summary><b>5. Generated Proposal & Novelty Scoring</b></summary>
+<br>
+<img src="image/usecase1_GRANTPROPSAL.png" alt="Grant Proposal">
+<img src="image/usecase1_Novelty.png" alt="Novelty Score">
+</details>
 
 ---
 
@@ -139,10 +186,12 @@ vmaro/
 ## 📫 Capabilities vs Limitations
 
 **Capabilities**:
+
 - **Deduplication**: Multi-API fetches eliminate cross-source duplicates.
 - **Robust Fail-Safes**: All keys are iterated cyclically. `clean_json_response()` parses markdown-polluted LLM responses flawlessly.
 
 **Future Items**:
+
 - Currently capped at ~15-20 papers max to avoid token overflow logic limitations on the base endpoints.
 - Deeper automated web-searching in the Methodology generation phase for specific up-to-date Python/R package implementations.
 
