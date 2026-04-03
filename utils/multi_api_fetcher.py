@@ -7,6 +7,8 @@ Includes automatic deduplication by DOI and title similarity
 import os
 import re
 import time
+import json
+import math
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict
@@ -20,169 +22,185 @@ class MultiAPIFetcher:
         self.core_key = os.getenv("CORE_API_KEY", "")
         self.user_email = os.getenv("API_EMAIL", "research@example.com")
     
-    def _detect_subject_apis(self, topic: str) -> List[str]:
-        """Intelligently select APIs based on topic keywords"""
-        topic_lower = topic.lower()
-        
-        # Always include Semantic Scholar as primary source (fetched first)
-        sources = ['semantic_scholar']
-        
-        # Medical/Biology/Healthcare topics
-        medical_keywords = ['health', 'medical', 'clinical', 'patient', 'disease', 'cancer', 
-                          'drug', 'hospital', 'therapy', 'diagnosis', 'biology', 'biomedical', 
-                          'treatment', 'pathology', 'epidemiology']
-        if any(kw in topic_lower for kw in medical_keywords):
-            sources.extend(['pubmed', 'crossref'])
-            print(f"  └─ Detected medical topic, adding PubMed + CrossRef")
-        
-        # Computer Science/AI/Physics/Math topics
-        cs_keywords = ['learning', 'algorithm', 'neural', 'deep', 'machine', 'ai', 'computer',
-                      'network', 'software', 'data', 'model', 'optimization', 'quantum', 'physics',
-                      'programming', 'computational']
-        if any(kw in topic_lower for kw in cs_keywords):
-            sources.append('arxiv')
-            print(f"  └─ Detected CS/AI topic, adding arXiv")
-        
-        # Engineering/Interdisciplinary topics
-        engineering_keywords = ['engineering', 'system', 'control', 'robotics', 'sensor', 
-                               'material', 'design', 'manufacturing', 'industrial']
-        if any(kw in topic_lower for kw in engineering_keywords):
-            if 'crossref' not in sources:
-                sources.append('crossref')
-            sources.append('openalex')
-            print(f"  └─ Detected engineering topic, adding CrossRef + OpenAlex")
-        
-        # Social sciences/Economics
-        social_keywords = ['social', 'economic', 'policy', 'education', 'psychology', 
-                          'behavior', 'survey', 'qualitative', 'sociology']
-        if any(kw in topic_lower for kw in social_keywords):
-            if 'crossref' not in sources:
-                sources.append('crossref')
-            if 'openalex' not in sources:
-                sources.append('openalex')
-            print(f"  └─ Detected social science topic, adding CrossRef + OpenAlex")
-        
-        # If no specific domain detected, use general sources
-        if len(sources) == 1:
-            sources.extend(['arxiv', 'crossref', 'openalex'])
-            print(f"  └─ General topic, using broad coverage")
-        
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_sources = []
-        for s in sources:
-            if s not in seen:
-                seen.add(s)
-                unique_sources.append(s)
-        
-        return unique_sources
-    
-    def fetch_all(self, topic: str, max_papers: int = 20, sources: List[str] = None, auto_select: bool = True) -> List[Dict]:
+    def _detect_subject_apis(self, domain: str) -> List[str]:
         """
-        Fetch papers from multiple sources SEQUENTIALLY and deduplicate
-        
-        Fetching order: Semantic Scholar (25 papers) → arXiv (15) → CrossRef (12) → OpenAlex (12) → PubMed (15)
-        
-        Args:
-            topic: Research topic/query
-            max_papers: Maximum papers to return after deduplication
-            sources: List of sources to use. If None and auto_select=False, uses default sources.
-            auto_select: If True and sources=None, intelligently selects APIs based on topic
-        
-        Returns:
-            List of deduplicated paper dictionaries with 'source', 'title', 'abstract', 'year', etc.
+        Select APIs based on the normalized domain from topic_normalizer.
+        Uses a clean domain → sources mapping instead of fragile keyword scanning.
         """
-        if sources is None:
-            if auto_select:
-                sources = self._detect_subject_apis(topic)
-            else:
-                sources = ['semantic_scholar', 'arxiv', 'crossref', 'openalex']
-        
-        print(f"\n  📚 Fetching papers from {len(sources)} source(s) in parallel: {', '.join(sources)}")
-        print(f"  {'─' * 70}")
-
-        # Map each source name to its fetch call
-        source_limits = {
-            'semantic_scholar': 25,
-            'arxiv': 15,
-            'pubmed': 15,
-            'crossref': 12,
-            'openalex': 12,
-            'core': 10,
+        domain_map = {
+            "biomedical":     ["semantic_scholar", "pubmed", "crossref"],
+            "cs_ai":          ["semantic_scholar", "arxiv"],
+            "engineering":    ["semantic_scholar", "crossref", "openalex"],
+            "social_science": ["semantic_scholar", "crossref", "openalex"],
+            "physics":        ["semantic_scholar", "arxiv"],
+            "general":        ["semantic_scholar", "arxiv", "crossref", "openalex"],
         }
+        sources = domain_map.get(domain, domain_map["general"])
+        print(f"  └─ Domain '{domain}' → using: {', '.join(sources)}")
+        return sources
+    
+    def fetch_all(self, topic_payload: dict, max_papers: int = 20) -> List[Dict]:
+        """
+        Fetch papers using the structured payload from topic_normalizer (Stage 00).
 
-        def _fetch_source(source: str):
-            limit = source_limits.get(source, 10)
-            if source == 'semantic_scholar':
-                return source, self._fetch_semantic_scholar(topic, limit=limit)
-            elif source == 'arxiv':
-                return source, self._fetch_arxiv(topic, limit=limit)
-            elif source == 'pubmed':
-                return source, self._fetch_pubmed(topic, limit=limit)
-            elif source == 'crossref':
-                return source, self._fetch_crossref(topic, limit=limit)
-            elif source == 'openalex':
-                return source, self._fetch_openalex(topic, limit=limit)
-            elif source == 'core':
-                return source, self._fetch_core(topic, limit=limit)
-            else:
-                raise ValueError(f"Unknown source: {source}")
+        Fans out over query_variants for richer corpus coverage, then deduplicates.
+        The existing _deduplicate() cleanly handles cross-variant overlap.
+
+        Args:
+            topic_payload: Structured dict from normalize_topic() with keys:
+                           core_topic, keywords, domain, query_variants, ...
+            max_papers:    Maximum papers to return after global deduplication.
+
+        Returns:
+            List of deduplicated paper dicts with 'source', 'title', 'abstract', etc.
+        """
+        core_topic     = topic_payload["core_topic"]
+        keywords       = topic_payload.get("keywords", [])
+        domain         = topic_payload.get("domain", "general")
+        query_variants = topic_payload.get("query_variants") or [core_topic]
+
+        # Domain-driven API selection (no keyword scanning on raw text)
+        sources = self._detect_subject_apis(domain)
 
         all_papers = []
-        results_map: Dict[str, List[Dict]] = {}
 
-        with ThreadPoolExecutor(max_workers=len(sources)) as executor:
-            future_to_source = {executor.submit(_fetch_source, s): s for s in sources}
-            for future in as_completed(future_to_source):
-                source = future_to_source[future]
-                try:
-                    _, papers = future.result()
-                    results_map[source] = papers
-                    print(f"  ✓ {source.upper()}: retrieved {len(papers)} papers")
-                except Exception as e:
-                    print(f"  ❌ {source.upper()}: failed — {str(e)[:60]}")
-                    results_map[source] = []
+        # Fan out: each query_variant runs across the full source pool
+        for query in query_variants:
+            print(f"\n  📚 Query: '{query}' across {len(sources)} source(s): {', '.join(sources)}")
+            print(f"  {'─' * 70}")
 
-        # Preserve original source ordering when merging
-        for source in sources:
-            all_papers.extend(results_map.get(source, []))
-        
-        # ── Fallback: web scraping if all APIs failed ─────────────────────
-        if len(all_papers) == 0:
+            results_map: Dict[str, List[Dict]] = {}
+            with ThreadPoolExecutor(max_workers=len(sources)) as executor:
+                future_to_source = {
+                    executor.submit(self._fetch_source, source, query, keywords): source
+                    for source in sources
+                }
+                for future in as_completed(future_to_source):
+                    source = future_to_source[future]
+                    try:
+                        _, papers = future.result()
+                        results_map[source] = papers
+                        print(f"  ✓ {source.upper()}: {len(papers)} papers")
+                    except Exception as e:
+                        print(f"  ❌ {source.upper()}: {str(e)[:60]}")
+                        results_map[source] = []
+
+            for source in sources:
+                all_papers.extend(results_map.get(source, []))
+
+        # ── Fallback: web scraping if all queries returned nothing ─────────
+        if not all_papers:
             print(f"\n  ⚠️  All APIs returned 0 papers. Trying web scraping fallback...")
-            fallback = self._web_scrape_fallback(topic, limit=max_papers)
-            all_papers.extend(fallback)
+            all_papers = self._web_scrape_fallback(core_topic, limit=max_papers)
 
         print(f"\n  {'─' * 70}")
-        print(f"  📊 Total papers fetched: {len(all_papers)}")
-        
-        # Deduplicate
+        print(f"  📊 Total fetched across {len(query_variants)} query variant(s): {len(all_papers)}")
+
         unique_papers = self._deduplicate(all_papers)
-        duplicates_removed = len(all_papers) - len(unique_papers)
-        print(f"  🔍 Unique papers after deduplication: {len(unique_papers)} (removed {duplicates_removed} duplicates)")
-        
-        # Sort by year (newest first) and citation count
-        unique_papers.sort(key=lambda p: (p.get('year', 0), p.get('citationCount', 0)), reverse=True)
-        
-        # Limit to max_papers
+        print(f"  🔍 Unique after dedup: {len(unique_papers)} (removed {len(all_papers) - len(unique_papers)} duplicates)")
+
+        # ── Relevance scoring — keyword/relation overlap + recency + citation ──
+        for paper in unique_papers:
+            paper["_relevance_score"] = self._score_relevance(paper, topic_payload)
+
+        unique_papers.sort(key=lambda p: p["_relevance_score"], reverse=True)
+
+        if unique_papers:
+            scores = [p["_relevance_score"] for p in unique_papers]
+            print(f"  🎯 Relevance scores — top: {scores[0]:.1f} | "
+                  f"p50: {scores[len(scores)//2]:.1f} | "
+                  f"bottom: {scores[-1]:.1f}")
+
+        # ── Persist full ranked pool — downstream agents can re-slice freely ──
+        os.makedirs("cache", exist_ok=True)
+        pool_path = "cache/paper_pool.json"
+        with open(pool_path, "w") as f:
+            json.dump(unique_papers, f, indent=2)
+        print(f"  💾 Full pool ({len(unique_papers)} papers) saved to {pool_path}")
+
+        # Slice top-N for LLM summarisation (token budget constraint)
         final_papers = unique_papers[:max_papers]
-        
-        # Source distribution of final papers
-        source_counts = {}
+
+        # Source distribution of final slice
+        source_counts: Dict[str, int] = {}
         for p in final_papers:
             src = p.get('source', 'Unknown')
             source_counts[src] = source_counts.get(src, 0) + 1
-        
-        print(f"\n  📈 Final selection ({len(final_papers)} papers):")
-        for source, count in sorted(source_counts.items(), key=lambda x: x[1], reverse=True):
-            print(f"     • {source}: {count} papers")
-        
+
+        print(f"\n  📈 Final selection ({len(final_papers)} papers, ranked by relevance):")
+        for src, cnt in sorted(source_counts.items(), key=lambda x: x[1], reverse=True):
+            print(f"     • {src}: {cnt} papers")
+
         if len(unique_papers) < max_papers:
             print(f"\n  ⚠️  Only {len(unique_papers)} unique papers available (requested {max_papers})")
-        
+
         print(f"  {'─' * 70}\n")
-        
         return final_papers
+
+    def _score_relevance(self, paper: dict, topic_payload: dict) -> float:
+        """
+        Score a paper's relevance to the normalized topic payload.
+        Pure keyword overlap — no embeddings, no extra API calls.
+
+        Weights:
+          title keyword match:    +3.0 per hit  (title is the strongest signal)
+          abstract keyword match: +1.0 per hit
+          relation phrase match:  +2.0 per hit  (relational phrases are specific)
+          recency bonus:          +0.1 per year after 2020 (soft preference)
+          citation bonus:         log(citations+1) * 0.5   (log-scaled, not dominant)
+        """
+        score = 0.0
+        title    = paper.get("title", "").lower()
+        abstract = paper.get("abstract", "").lower()
+        keywords = [kw.lower() for kw in topic_payload.get("keywords", [])]
+        relations = [r.lower() for r in topic_payload.get("relations", [])]
+
+        for kw in keywords:
+            if kw in title:
+                score += 3.0
+            if kw in abstract:
+                score += 1.0
+
+        for rel in relations:
+            if rel in abstract:
+                score += 2.0
+
+        # Recency bonus — recent work preferred but not dominant
+        year = paper.get("year", 0)
+        if year > 2020:
+            score += (year - 2020) * 0.1
+
+        # Citation bonus — log-scaled so mega-cited papers don't crowd out niche ones
+        citations = paper.get("citationCount", 0) or 0
+        score += math.log(citations + 1) * 0.5
+
+        return score
+
+    def _fetch_source(self, source: str, query: str, keywords: List[str]):
+        """
+        Dispatch to the correct fetch method.
+        Extracted from the old inline lambda so fetch_all stays readable.
+        """
+        source_limits = {
+            'semantic_scholar': 25, 'arxiv': 15, 'pubmed': 15,
+            'crossref': 12, 'openalex': 12, 'core': 10,
+        }
+        limit = source_limits.get(source, 10)
+
+        if source == 'semantic_scholar':
+            return source, self._fetch_semantic_scholar(query, limit=limit)
+        elif source == 'arxiv':
+            return source, self._fetch_arxiv(query, keywords=keywords, limit=limit)
+        elif source == 'pubmed':
+            return source, self._fetch_pubmed(query, limit=limit)
+        elif source == 'crossref':
+            return source, self._fetch_crossref(query, limit=limit)
+        elif source == 'openalex':
+            return source, self._fetch_openalex(query, limit=limit)
+        elif source == 'core':
+            return source, self._fetch_core(query, limit=limit)
+        else:
+            raise ValueError(f"Unknown source: {source}")
     
     # ──────────────────────────────────────────────────────────────────────
     # Web scraping fallback (used only when ALL APIs fail)
@@ -376,13 +394,28 @@ class MultiAPIFetcher:
         
         return normalized[:limit]  # Extra safety: enforce limit
     
-    def _fetch_arxiv(self, topic: str, limit: int = 15) -> List[Dict]:
-        """Fetch from arXiv API"""
+    def _fetch_arxiv(self, topic: str, keywords: List[str] = None, limit: int = 15) -> List[Dict]:
+        """
+        Fetch from arXiv API.
+        When keywords are provided (from topic_normalizer), use them for
+        higher-precision multi-term AND matching. Falls back to naive
+        word-split on the raw topic string for backward compatibility.
+        """
         base_url = "http://export.arxiv.org/api/query"
-        
-        # Extract meaningful keywords for arXiv's exact AND matching
-        query_terms = [w for w in topic.split() if w.lower() not in ('in', 'on', 'the', 'of', 'and', 'a', 'to', 'for', 'with', 'by')]
-        arxiv_query = ' AND '.join([f'all:{w}' for w in query_terms])
+
+        if keywords:
+            # Use normalized keywords — much higher precision than splitting raw topic.
+            # Cap at 6 terms to avoid over-constraining the arXiv AND chain.
+            arxiv_query = ' AND '.join(
+                [f'all:{kw.replace(" ", "+")}' for kw in keywords[:6]]
+            )
+        else:
+            # Fallback: strip stopwords from raw topic string (old behaviour)
+            query_terms = [
+                w for w in topic.split()
+                if w.lower() not in ('in', 'on', 'the', 'of', 'and', 'a', 'to', 'for', 'with', 'by')
+            ]
+            arxiv_query = ' AND '.join([f'all:{w}' for w in query_terms])
         
         # Do NOT use quote() here - requests handles URL encoding automatically
         # Using quote() causes double-encoding (%20 → %2520) which breaks the query

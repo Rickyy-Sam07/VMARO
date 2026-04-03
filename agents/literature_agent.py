@@ -2,9 +2,19 @@ import os
 import json
 from utils.schema import safe_parse, call_gemini_with_retry
 from utils.multi_api_fetcher import MultiAPIFetcher
+from utils.topic_normalizer import normalize_topic
 
 def run(topic: str) -> dict:
-    print("[Agent1]       Literature Mining")
+    # ── Stage 00: Normalize any freeform user input ───────────────────────
+    print("[Stage 00]     Topic Normalization")
+    topic_payload = normalize_topic(topic)
+    core_topic = topic_payload["core_topic"]
+    print(f"  ✓ core_topic:  {core_topic}")
+    print(f"  ✓ domain:      {topic_payload['domain']}")
+    print(f"  ✓ keywords:    {topic_payload['keywords']}")
+    print(f"  ✓ variants:    {topic_payload['query_variants']}\n")
+
+    print("[Agent 1]      Literature Mining")
     
     # MOCK_MODE check
     if os.getenv("MOCK_MODE", "").lower() == "true":
@@ -12,21 +22,17 @@ def run(topic: str) -> dict:
             return json.load(f)
 
     fallback = {
-        "topic": topic,
+        "topic": topic,        # raw user input — must match _topic.txt for cache validation
         "papers": []
     }
 
     try:
-        # Pass 1 - Multi-API Retrieval with automatic deduplication
-        # Fetches SEQUENTIALLY: Semantic Scholar → arXiv → CrossRef → OpenAlex → PubMed
-        print(f"  🔍 Starting multi-source paper retrieval for: '{topic}'")
+        # Pass 1 — Multi-API fan-out using structured payload
+        # Fans out over query_variants × domain-selected APIs, then deduplicates
+        print(f"  🔍 Starting multi-source retrieval for: '{core_topic}'")
         
         fetcher = MultiAPIFetcher()
-        
-        # Auto-select sources based on topic keywords
-        # Semantic Scholar is ALWAYS queried first (20-25 papers)
-        # Then subject-specific APIs are added based on detected domain
-        filtered = fetcher.fetch_all(topic, max_papers=20, sources=None, auto_select=True)
+        filtered = fetcher.fetch_all(topic_payload, max_papers=20)
         
         if not filtered:
             print("  ❌ No papers found from any source")
@@ -47,10 +53,11 @@ def run(topic: str) -> dict:
             })
         
         # Pass 2 - Summarisation via Groq
+        # Use core_topic (clean canonical form) instead of raw user paragraph
         sys_inst = f"""You are a research assistant.
 Return ONLY valid JSON matching this schema:
 {{
-  "topic": "{topic}",
+  "topic": "{core_topic}",
   "papers": [
     {{
       "title": "exact title from input",
@@ -63,7 +70,7 @@ Return ONLY valid JSON matching this schema:
   ]
 }}"""
 
-        prompt = f"""Below are research papers on "{topic}" from multiple academic databases.
+        prompt = f"""Below are research papers on "{core_topic}" from multiple academic databases.
 For each paper, write a 2–3 sentence plain-English summary and identify the single most
 important contribution. Keep the 'api_source' and 'url' fields exactly as provided.
 
@@ -92,6 +99,12 @@ Papers: {json.dumps(papers_for_llm)}"""
                         if title in source_lookup:
                             paper["url"] = source_lookup[title]["url"]
                 
+                # Force topic field to raw user input — cache.py validates
+                # papers.json["topic"] against _topic.txt, which stores the original.
+                # core_topic was only used for retrieval quality; the cache key
+                # must be the original string the user typed.
+                result["topic"] = topic
+
                 return result
             except Exception as e:
                 if attempt == 1:
