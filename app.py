@@ -1627,13 +1627,15 @@ with col_main:
             st.markdown(html, unsafe_allow_html=True)
             
         if mev and mev.get("parallel_was_run") and meth_a and meth_b:
-            # We must stack them vertically
             win_label = mev.get("winner")
-            render_meth(meth_a, "Primary Gap Methodology", win_label == "A")
             
             st.markdown(f'<div class="pull-quote">{mev.get("reasoning", "")}</div>', unsafe_allow_html=True)
             
-            render_meth(meth_b, "Challenger Gap Methodology", win_label == "B")
+            c_meth_a, c_meth_b = st.columns(2, gap="large")
+            with c_meth_a:
+                render_meth(meth_a, "Primary Gap Methodology", win_label == "A")
+            with c_meth_b:
+                render_meth(meth_b, "Challenger Gap Methodology", win_label == "B")
             
             if st.button("Use challenger methodology instead"):
                 mev["winner"] = "B" if win_label == "A" else "A"
