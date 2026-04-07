@@ -1290,9 +1290,14 @@ with col_main:
                 for label_t, items in [("Metrics", metrics[:3]), ("Datasets", datasets[:2]), ("Tools", tools[:3])]:
                     if items:
                         st.markdown(f'<div style="margin-bottom:10px;"><div style="font-family:\'JetBrains Mono\',monospace; font-size:0.62rem; color:#2e3d58; text-transform:uppercase; margin-bottom:4px;">{label_t}</div><div style="color:#9aaac2; font-size:0.82rem;">{" · ".join(items)}</div></div>', unsafe_allow_html=True)
-                if st.button("View Grant →", key="dash_grant"):
-                    st.session_state.active_step = 7
-                    st.rerun()
+                if load("grant"):
+                    if st.button("View Grant →", key="dash_grant"):
+                        st.session_state.active_step = 7
+                        st.rerun()
+                else:
+                    if st.button("Select Format →", key="dash_format"):
+                        st.session_state.active_step = 6
+                        st.rerun()
             else:
                 st.markdown('<div style="color:#2e3d58;font-size:0.82rem;font-family:\'JetBrains Mono\',monospace;">Select a gap to generate methodology</div>', unsafe_allow_html=True)
                 if st.button("Select Gap →", key="dash_gap2"):

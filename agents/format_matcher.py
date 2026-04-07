@@ -70,9 +70,9 @@ def run(
 
     # Extract a concise methodology summary to keep the prompt compact
     methodology_summary = {
-        "research_approach": methodology.get("research_approach", ""),
-        "study_design": methodology.get("study_design", ""),
-        "key_methods": methodology.get("key_methods", []),
+        "experimental_design": methodology.get("experimental_design", ""),
+        "evaluation_metrics": methodology.get("evaluation_metrics", []),
+        "tools_and_frameworks": methodology.get("tools_and_frameworks", []),
     }
 
     sys_inst = """You are an expert research funding advisor.
