@@ -1679,6 +1679,37 @@ with col_main:
         llm_default = fm.get("selected_format_id")
         formats = st.session_state.formats
         
+        # Dropdown selection
+        st.markdown("### Quick Select")
+        fmt_options = {f: formats[f]["name"] for f in formats}
+        default_index = list(formats.keys()).index(llm_default) if llm_default in formats else 0
+        selected_fid = st.selectbox("Choose a Format:", options=list(formats.keys()), format_func=lambda x: f"{formats[x]['name']} ({x})", index=default_index)
+        
+        if st.button("Confirm Format Selection", type="primary", key="quick_select_format"):
+            st.session_state.user_format_override = selected_fid
+            save("format_match", run_format_matcher(st.session_state.pipeline_topic, load("methodology_eval").get("winning_methodology") if load("methodology_eval") else load("methodology_a"), st.session_state.formats, selected_fid))
+            st.success("Format confirmed — generating grant")
+            
+            from agents.grant_agent import run as run_grant
+            from agents.novelty_agent import run as run_novelty
+            
+            topic = st.session_state.pipeline_topic
+            user_gap = load("user_gap_selection") or {}
+            meth_data = load("methodology_eval").get("winning_methodology") if load("methodology_eval") else load("methodology_a")
+            format_match = load("format_match")
+            
+            grant = run_grant(topic, user_gap.get("description", ""), meth_data, format_match)
+            save("grant", grant)
+            
+            novelty = run_novelty(grant, load("tree"))
+            save("novelty", novelty)
+            
+            st.session_state.active_step = 7
+            st.rerun()
+
+        st.markdown("---")
+        st.markdown("### Detailed Format Options")
+        
         # Grid layout
         cols = st.columns(3)
         for i, (fid, fmt) in enumerate(formats.items()):
