@@ -9,11 +9,6 @@
   <img src="https://img.shields.io/badge/UI-Streamlit-red.svg">
 </div>
 
-<br>
-<p align="center">
-  <img src="image/datapipeline.png" alt="Data Pipeline" width="800">
-</p>
-
 ---
 
 ## 🚀 Overview
@@ -33,10 +28,6 @@ The multi-model engine sequentially analyzes literature, detects emerging macro-
 - 🌲 **Vectorless Navigation**: No FAISS, no ChromaDB. Replaces black-box semantic retrieval with direct semantic clustering, constructing a visual Thematic Tree directly from high-signal abstracts and metadata.
 - 🚦 **Intelligent Quality Gates**: Built-in "LLM-as-a-Judge" layers validate outputs iteratively between stages. If data is shallow or hallucinatory, the gate will flag it (`PASS`, `REVISE`, `FAIL`).
 - ⚔️ **Parallel Methodology Evaluation**: VMARO doesn't just pick the first idea. It drafts a primary methodology, constructs a challenger counter-approach, and objectively evaluates which design has stronger statistical power and feasibility.
-
-<p align="center">
-  <img src="image/agent_synchornization.png" alt="Agent Synchronization" width="600">
-</p>
 
 - 📑 **Institutional Format Matching**: Automatically restructures and tunes rhetorical tone to align with rigorous schemas (e.g., NSF, NIH, ERC) using a dedicated Format Matcher. You can upload custom JSON format templates as well.
 - 🔄 **Stateful Resiliency**: All outputs cache natively via `utils/cache.py`. Process interrupted? The pipeline resumes immediately from the last checkpoint to save API credits.
@@ -72,31 +63,37 @@ The multi-model engine sequentially analyzes literature, detects emerging macro-
 ### Dashboard Workflows in Action
 
 <details>
-<summary><b>1. Literature Mining & Corpus Generation</b></summary>
+<summary><b>1. Command Center / Overview Dashboard</b></summary>
+<br>
+<img src="image/usecase_overview.png" alt="Command Center Overview">
+</details>
+
+<details>
+<summary><b>2. Literature Mining & Corpus Generation</b></summary>
 <br>
 <img src="image/usecase1_literature_corpus.png" alt="Literature Mining">
 </details>
 
 <details>
-<summary><b>2. Thematic Tree Synthesis</b></summary>
+<summary><b>3. Thematic Tree Synthesis</b></summary>
 <br>
 <img src="image/usecase1_thematicTree.png" alt="Thematic Tree">
 </details>
 
 <details>
-<summary><b>3. Gap Identification & Selection</b></summary>
+<summary><b>4. Gap Identification & Selection</b></summary>
 <br>
 <img src="image/usecase1_GAPSELECTION.png" alt="Gap Selection">
 </details>
 
 <details>
-<summary><b>4. Parallel Methodology Evaluation</b></summary>
+<summary><b>5. Parallel Methodology Evaluation</b></summary>
 <br>
 <img src="image/usecase1_methodology.png" alt="Methodology Evaluation">
 </details>
 
 <details>
-<summary><b>5. Generated Proposal & Novelty Scoring</b></summary>
+<summary><b>6. Generated Proposal & Novelty Scoring</b></summary>
 <br>
 <img src="image/usecase1_GRANTPROPSAL.png" alt="Grant Proposal">
 <img src="image/usecase1_Novelty.png" alt="Novelty Score">
@@ -192,7 +189,7 @@ vmaro/
 
 **Future Items**:
 
-- Currently capped at ~15-20 papers max to avoid token overflow logic limitations on the base endpoints.
+- Paper count is intentionally bounded at 20 to optimize token efficiency and maintain coherent thematic clustering — larger corpora dilute signal without improving output quality at current LLM context limits.
 - Deeper automated web-searching in the Methodology generation phase for specific up-to-date Python/R package implementations.
 
 ---
