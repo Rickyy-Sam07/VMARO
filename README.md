@@ -11,7 +11,7 @@
 
 ---
 
-## 🚀 Overview
+## Overview
 
 VMARO is an advanced **8-stage, multi-agent AI pipeline** orchestrating academic research and grant writing. Instead of the traditional, generic RAG mechanism (chunking texts and vector similarity), VMARO utilizes LLM-native structural synthesis to construct an interpretable "**Thematic Tree**" directly from multiple live academic sources.
 
@@ -23,21 +23,24 @@ The multi-model engine sequentially analyzes literature, detects emerging macro-
 
 ---
 
-## ✨ Key Features & Architecture Improvements
+## Key Features & Architecture Improvements
 
-- 🌲 **Vectorless Navigation**: No FAISS, no ChromaDB. Replaces black-box semantic retrieval with direct semantic clustering, constructing a visual Thematic Tree directly from high-signal abstracts and metadata.
-- 🚦 **Intelligent Quality Gates**: Built-in "LLM-as-a-Judge" layers validate outputs iteratively between stages. If data is shallow or hallucinatory, the gate will flag it (`PASS`, `REVISE`, `FAIL`).
-- ⚔️ **Parallel Methodology Evaluation**: VMARO doesn't just pick the first idea. It drafts a primary methodology, constructs a challenger counter-approach, and objectively evaluates which design has stronger statistical power and feasibility.
+- **Vectorless Navigation**: No FAISS, no ChromaDB. Replaces black-box semantic retrieval with direct semantic clustering, constructing a visual Thematic Tree directly from high-signal abstracts and metadata.
+- **Intelligent Quality Gates**: Built-in "LLM-as-a-Judge" layers validate outputs iteratively between stages. If data is shallow or hallucinatory, the gate will flag it (`PASS`, `REVISE`, `FAIL`).
+- **Parallel Methodology Evaluation**: VMARO doesn't just pick the first idea. It drafts a primary methodology, constructs a challenger counter-approach, and objectively evaluates which design has stronger statistical power and feasibility.
+- **Intent-Aware Preprocessing**: Raw user input — whether a phrase or a paragraph — is normalized into a structured payload with domain classification, query variants, and explicit research intent (`survey_gaps`, `propose_methodology`) before retrieval begins. Prevents garbage-in-garbage-out at the pipeline root.
 
-- 📑 **Institutional Format Matching**: Automatically restructures and tunes rhetorical tone to align with rigorous schemas (e.g., NSF, NIH, ERC) using a dedicated Format Matcher. You can upload custom JSON format templates as well.
-- 🔄 **Stateful Resiliency**: All outputs cache natively via `utils/cache.py`. Process interrupted? The pipeline resumes immediately from the last checkpoint to save API credits.
+- **Institutional Format Matching**: Automatically restructures and tunes rhetorical tone to align with rigorous schemas (e.g., NSF, NIH, ERC) using a dedicated Format Matcher. You can upload custom JSON format templates as well.
+- **Stateful Resiliency**: All outputs cache natively via `utils/cache.py`. Process interrupted? The pipeline resumes immediately from the last checkpoint to save API credits.
 
 ---
 
-## 🧠 The 8-Stage Pipeline
+## The 8-Stage Pipeline
 
 ```text
 [Research Topic]
+       ↓
+ 0️⃣  Topic Normalization       (Intent classification + query variant generation)
        ↓
  1️⃣  Literature Mining         (Multi-API Fetcher: arXiv, PubMed, Scholar + LLM)
        ↓
@@ -101,7 +104,7 @@ The multi-model engine sequentially analyzes literature, detects emerging macro-
 
 ---
 
-## 🛠️ Quickstart
+## Quickstart
 
 ### 1. Clone & Environment
 
@@ -149,11 +152,12 @@ To utilize the dynamic visualizer (Agraph), manual gap selection intervention, a
 ```bash
 streamlit run app.py
 ```
+
 Open **`http://localhost:8501`** in your browser.
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```text
 vmaro/
@@ -194,5 +198,6 @@ vmaro/
 
 ---
 
-## 📝 License
+## License
+
 MIT License. Feel free to fork, expand, and commercialize.
