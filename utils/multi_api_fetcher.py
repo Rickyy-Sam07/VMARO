@@ -1,7 +1,7 @@
 """
 Multi-API Research Paper Fetcher
 Fetches papers sequentially: Semantic Scholar → arXiv → CrossRef → OpenAlex → PubMed
-Includes automatic deduplication by DOI and title similarity
+Deduplicates by DOI, explicit preprint relationships, and exact normalized title
 """
 
 import os
@@ -9,7 +9,9 @@ import re
 import time
 import json
 import math
+import unicodedata
 import requests
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict
 
@@ -570,12 +572,18 @@ class MultiAPIFetcher:
         
         r = requests.get(url, params=params, headers=headers, timeout=15)
         r.raise_for_status()
-        items = r.json().get("message", {}).get("items", [])
+        payload = r.json()
+        message = payload.get("message") if isinstance(payload, dict) else None
+        items = message.get("items") if isinstance(message, dict) else None
+        if not isinstance(items, list):
+            return []
         
         normalized = []
         for item in items:
-            abstract = item.get("abstract", "")
-            if not abstract or len(abstract.strip()) < 50:
+            if not isinstance(item, dict):
+                continue
+            abstract = item.get("abstract")
+            if not isinstance(abstract, str) or len(abstract.strip()) < 50:
                 continue
             
             # Get authors
@@ -603,6 +611,8 @@ class MultiAPIFetcher:
                 "doi": item.get("DOI", ""),
                 "citationCount": item.get("is-referenced-by-count", 0),
                 "source": "CrossRef",
+                "crossref_type": item.get("type"),
+                "crossref_relation": item.get("relation"),
                 "url": item.get("URL", "")
             })
         
@@ -709,35 +719,175 @@ class MultiAPIFetcher:
         
         return normalized
     
-    def _deduplicate(self, papers: List[Dict]) -> List[Dict]:
-        """Remove duplicates by DOI first, then by normalized title"""
-        seen_dois = set()
-        seen_titles = set()
-        unique_papers = []
-        
+    @staticmethod
+    def _normalize_doi(value):
+        if not isinstance(value, str):
+            return ""
+        value = re.sub(r'^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)', '',
+                       value.strip(), flags=re.I).strip().casefold()
+        return value if re.fullmatch(r'10\.\d{4,9}/\S+', value) else ""
+
+    def _preprint_links(self, papers):
+        """Return isolated, directed DOI pairs from Crossref deposits."""
+        incident = defaultdict(set)
+        work_types = defaultdict(set)
         for paper in papers:
-            # DOI-based deduplication (most reliable)
-            doi = paper.get("doi", "").strip()
-            if doi:
-                if doi in seen_dois:
+            doi = self._normalize_doi(paper.get("doi"))
+            if not doi or paper.get("source") != "CrossRef":
+                continue
+            work_type = paper.get("crossref_type")
+            if isinstance(work_type, str):
+                work_types[doi].add(work_type)
+            relations = paper.get("crossref_relation")
+            if not isinstance(relations, dict):
+                continue
+            for kind in ("is-preprint-of", "has-preprint"):
+                entries = relations.get(kind)
+                if not isinstance(entries, list):
                     continue
-                seen_dois.add(doi)
-                unique_papers.append(paper)
-                continue
-            
-            # Title-based deduplication for papers without DOI
-            title = paper.get("title", "").strip()
-            if not title:
-                continue
-            
-            # Normalize title: lowercase, remove punctuation, collapse whitespace
-            normalized_title = re.sub(r'[^\w\s]', '', title.lower())
-            normalized_title = re.sub(r'\s+', ' ', normalized_title).strip()
-            
-            if normalized_title in seen_titles:
-                continue
-            
-            seen_titles.add(normalized_title)
-            unique_papers.append(paper)
-        
-        return unique_papers
+                for entry in entries:
+                    if not isinstance(entry, dict) or entry.get("id-type") != "doi":
+                        continue
+                    target = self._normalize_doi(entry.get("id"))
+                    if not target:
+                        continue
+                    edge = (doi, target) if kind == "is-preprint-of" else (target, doi)
+                    incident[doi].add(edge)
+                    incident[target].add(edge)
+
+        # Include claims about unfetched DOIs in the conflict check. A reverse
+        # claim, a chain, or multiple candidate partners makes a link ambiguous.
+        publication_types = {"journal-article", "proceedings-article", "book-chapter"}
+        return {
+            preprint: publication
+            for preprint, edges in incident.items()
+            if len(edges) == 1
+            for subject, publication in edges
+            if subject == preprint and publication != preprint
+            and len(incident[publication]) == 1
+            and not work_types[preprint].intersection(publication_types)
+            and "posted-content" not in work_types[publication]
+        }
+
+    @staticmethod
+    def _first_author_parts(paper):
+        """Read one author entry. Only a comma explicitly signals surname-first."""
+        authors = paper.get("authors")
+        if not isinstance(authors, (list, tuple)) or not authors:
+            return None
+        name = authors[0]
+        if not isinstance(name, str):
+            return None
+        name = unicodedata.normalize("NFC", unicodedata.normalize("NFKC", name).casefold())
+        name = name.translate(str.maketrans({"’": "'", "‐": "-", "‑": "-"}))
+        parts = name.split(",")
+        if len(parts) == 2:
+            family, given = (part.strip() for part in parts)
+        elif len(parts) == 1:
+            tokens = name.split()
+            if len(tokens) < 2:
+                return None
+            family, given = tokens[-1], " ".join(tokens[:-1])
+        else:
+            return None
+
+        def name_word(word):
+            # Retain accents and meaningful apostrophes and hyphens.
+            return all(
+                part and part[0].isalpha()
+                and all(c.isalpha() or unicodedata.category(c).startswith("M") for c in part)
+                for part in re.split(r"[-']", word)
+            )
+
+        given = tuple(token.removesuffix(".") if len(token) == 2 else token
+                      for token in given.split())
+        family = tuple(family.split())
+        if (not given or not family or not all(map(name_word, given + family))
+                or any(len(word) == 1 for word in family)):
+            return None
+        return family, given
+
+    @staticmethod
+    def _authors_match(left, right):
+        if left is None or right is None:
+            return False
+        left_family, left_given = left
+        right_family, right_given = right
+        if left_family != right_family or len(left_given) != len(right_given):
+            return False
+        # An initial can abbreviate a compatible given name, but two
+        # initial-only entries do not provide enough evidence on their own.
+        if not any(len(word) > 1 for word in left_given + right_given):
+            return False
+        return all(
+            a == b or (min(len(a), len(b)) == 1 and a[0] == b[0])
+            for a, b in zip(left_given, right_given)
+        )
+
+    def _deduplicate(self, papers: List[Dict]) -> List[Dict]:
+        """Group directly compatible records, retaining their provenance."""
+        links = self._preprint_links(papers)
+        publications = set(links.values())
+
+        def doi_of(p):
+            return self._normalize_doi(p.get("doi"))
+
+        def title_of(p):
+            value = p.get("title")
+            if not isinstance(value, str):
+                return ""
+            return ' '.join(re.sub(r'[^\w\s]', '', value.casefold()).split())
+
+        def compatible(a, b):
+            da, db = doi_of(a), doi_of(b)
+            if da and db:
+                return da == db or links.get(da) == db or links.get(db) == da
+            # An unparseable supplied DOI is not evidence of an absent DOI.
+            if (a.get("doi") and not da) or (b.get("doi") and not db):
+                return False
+            title = title_of(a)
+            return bool(title and title == title_of(b) and self._authors_match(
+                self._first_author_parts(a), self._first_author_parts(b)
+            ))
+
+        # Resolve DOI groups first. Among DOI-free records, consider fuller
+        # names first so an initial can be checked against competing names.
+        def match_order(item):
+            _, paper = item
+            if doi_of(paper):
+                return (0, 0)
+            author = self._first_author_parts(paper)
+            return (1, sum(len(word) == 1 for word in author[1]) if author else 0)
+
+        groups = []
+        ordered = sorted(enumerate(papers), key=match_order)
+        for index, paper in ordered:
+            matches = [group for group in groups
+                       if all(compatible(paper, member) for _, member in group)]
+            if len(matches) == 1:
+                matches[0].append((index, paper))
+            else:
+                groups.append([(index, paper)])
+
+        result = []
+        for group in sorted(groups, key=lambda g: min(i for i, _ in g)):
+            # Prefer the publication named by a verified relationship.
+            group.sort(key=lambda item: (
+                doi_of(item[1]) not in publications, not bool(doi_of(item[1])), item[0]
+            ))
+            primary = dict(group[0][1])
+            if len(group) > 1:
+                primary_doi = doi_of(primary)
+                for _, other in group[1:]:
+                    for key, value in other.items():
+                        # These fields describe a particular version or source.
+                        if doi_of(other) != primary_doi:
+                            if key in ("crossref_type", "crossref_relation"):
+                                continue
+                            if primary_doi in publications and key in ("source", "url"):
+                                continue
+                        if key not in primary or primary[key] in (None, '', [], 0):
+                            primary[key] = value
+                primary["duplicate_records"] = [dict(p) for _, p in group[1:]]
+            result.append(primary)
+        return result
